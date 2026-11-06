@@ -1,0 +1,21 @@
+[project]
+name = "ai-consultant"
+version = "0.1.0"
+description = "AI consultant over a company knowledge base: a site widget and a Telegram bot on one engine"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [".venv", "models"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",  # ruff format keeps code width; long lines left are Russian texts in literals
+    "B008",  # File() and Form() in FastAPI signatures
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
