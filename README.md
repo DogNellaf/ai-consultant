@@ -15,8 +15,8 @@ The demo base is Kolosok, a made-up bakery: prices, delivery and payment, freque
 docker compose up --build
 ```
 
-Open http://localhost:8000/ for the widget on the server, http://localhost:8000/browser.html for the
-mode where the search runs on the visitor's device. Nothing to configure: without a model key the
+Open http://localhost:8000/ for the demo bakery site with the widget on the server,
+http://localhost:8000/browser.html for the mode where the search runs on the visitor's device. Nothing to configure: without a model key the
 answers are the found fragments.
 
 The bot needs `TELEGRAM_BOT_TOKEN` in `.env` (see `.env.example`): `docker compose --profile bot up`.
@@ -26,6 +26,20 @@ On the site:
 ```html
 <script src="https://consultant.example.com/widget.js" defer></script>
 ```
+
+The widget takes the site's colours from custom properties on the page (`--consultant-accent`,
+`--consultant-accent-text`, `--consultant-font`). The conversation stays when the visitor moves to
+another page of the site, until the tab is closed. Buttons on the page can open it or ask a question:
+`AiConsultant.open()`, `AiConsultant.ask("...")`.
+
+### The demo site
+
+`widget/` holds the made-up Kolosok bakery: home, about, menu, delivery and address. It is built on
+the [Business Casual](https://github.com/StartBootstrap/startbootstrap-business-casual) template by
+Start Bootstrap (MIT) with Bootstrap 5.2.3, the Lora and Raleway fonts (OFL) are served from the
+site, and the photos come from Wikimedia Commons under CC0 and CC BY 2.0 (authors on
+`credits.html`). Every price, hour and rule on the pages is taken from `knowledge/kolosok/`, so the
+site and the consultant never disagree.
 
 ## How it answers
 
@@ -131,7 +145,7 @@ Russia; with the browser mode they stay on the visitor's device.
 ```bash
 python -m venv .venv && .venv/Scripts/pip install -r requirements.txt -r requirements-dev.txt
 python scripts/download_model.py
-pytest                                   # 59 tests; the smoke runs on the real model
+pytest                                   # 61 tests; the smoke runs on the real model
 TEST_DATABASE_URL=postgresql://... pytest tests/test_pgstore.py
 ruff check . && ruff format --check .
 uvicorn app.api:app --reload             # in-memory store without DATABASE_URL

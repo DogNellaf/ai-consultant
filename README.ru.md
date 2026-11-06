@@ -16,8 +16,8 @@
 docker compose up --build
 ```
 
-http://localhost:8000/ — виджет с сервером, http://localhost:8000/browser.html — режим, где поиск
-идёт на устройстве посетителя. Настраивать ничего не нужно: без ключа модели ответом служит
+http://localhost:8000/ — сайт вымышленной пекарни с виджетом на сервере,
+http://localhost:8000/browser.html — режим, где поиск идёт на устройстве посетителя. Настраивать ничего не нужно: без ключа модели ответом служит
 найденный фрагмент.
 
 Боту нужен `TELEGRAM_BOT_TOKEN` в `.env` (см. `.env.example`): `docker compose --profile bot up`.
@@ -27,6 +27,19 @@ http://localhost:8000/ — виджет с сервером, http://localhost:80
 ```html
 <script src="https://consultant.example.com/widget.js" defer></script>
 ```
+
+Цвета и шрифт виджет берёт у сайта из CSS-переменных на странице (`--consultant-accent`,
+`--consultant-accent-text`, `--consultant-font`). Переписка не пропадает, когда посетитель переходит
+на другую страницу сайта, пока вкладка открыта. Кнопки на странице могут открыть чат или задать
+вопрос: `AiConsultant.open()`, `AiConsultant.ask("...")`.
+
+### Демо-сайт
+
+В `widget/` лежит сайт вымышленной пекарни «Колосок»: главная, о пекарне, меню, доставка и адрес.
+Он собран на шаблоне [Business Casual](https://github.com/StartBootstrap/startbootstrap-business-casual)
+от Start Bootstrap (MIT) с Bootstrap 5.2.3, шрифты Lora и Raleway (OFL) отдаются с самого сайта, фото —
+с Wikimedia Commons под CC0 и CC BY 2.0 (авторы на `credits.html`). Цены, часы и правила на страницах
+взяты из `knowledge/kolosok/`, так что сайт и консультант не расходятся.
 
 ## Как отвечает
 

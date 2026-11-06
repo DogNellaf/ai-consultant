@@ -5,7 +5,7 @@
  * Options as data- attributes of the script tag:
  *   data-title       header title (default: the company from the server)
  *   data-target      CSS selector to mount inline instead of the floating button
- *   data-open        "1" opens the chat at once
+ *   data-open        "1" opens the chat at once, except on a phone where it would cover the page
  *   data-mode        "api" (default) asks the server; "browser" searches on the visitor's device
  *                    with transformers.js and answers with the found fragment, nothing is sent
  *   data-index       browser mode: kb-index.json (scripts/export_index.py)
@@ -15,6 +15,11 @@
  *
  * Without a server the lead form still works: the widget shows the message the manager would
  * get in Telegram instead of sending it.
+ *
+ * Colours and font follow the site through custom properties on the page:
+ *   :root { --consultant-accent: #2f170f; --consultant-accent-text: #fff; --consultant-font: ...; }
+ *
+ * window.AiConsultant: open(), ask(text) and forget(), which drops the saved conversation.
  */
 (function () {
   "use strict";
@@ -44,8 +49,8 @@
 
   /* ---------------------------------------------------------------- engines */
 
-  function apiEngine() {
-    var sessionId = null;
+  function apiEngine(saved) {
+    var sessionId = saved || null;
     async function post(path, body, isForm) {
       var r = await fetch(base + path.replace(/^\//, ""), {
         method: "POST",
@@ -67,6 +72,7 @@
         return post("api/upload", f, true);
       },
       dropUpload: function () { return post("api/upload/delete", { session_id: sessionId }); },
+      session: function () { return sessionId; },
       accept: ".txt,.md,.pdf",
     };
   }
@@ -164,8 +170,8 @@
       ready: ready,
       greet: async function () {
         await ready;
-        return reply("greeting", "Здравствуйте! Я консультант компании " + company + ". Отвечаю по прайсу, доставке и частым вопросам, " +
-          "под ответом показываю, откуда взял. Можно прислать свой текст и спросить по нему.", { buttons: EXAMPLES.concat([MANAGER]) });
+        return reply("greeting", "Здравствуйте! " + company + " на связи, я ИИ-консультант: отвечаю по прайсу, доставке и частым вопросам, " +
+          "а под ответом показываю, откуда взял. Можно прислать свой текст и спросить по нему.", { buttons: EXAMPLES.concat([MANAGER]) });
       },
       ask: ask,
       upload: async function (file) {
@@ -195,6 +201,46 @@
 
   /* -------------------------------------------------------------------- UI */
 
+  /* Icons from Lucide (ISC license, lucide.dev), 24×24 stroke paths */
+  var ICONS = {
+    chat: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+    bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+    close: '<path d="m6 9 6 6 6-6"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    clip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+    send: '<path d="M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z"/><path d="M6 12h16"/>',
+    file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+    search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+    chevron: '<path d="m6 9 6 6 6-6"/>',
+  };
+  function icon(name, cls) {
+    var span = document.createElement("span");
+    span.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"' + (cls ? ' class="' + cls + '"' : "") + ">" + ICONS[name] + "</svg>";
+    return span.firstChild;
+  }
+  function iconButton(name, cls, label) {
+    var b = el("button", cls);
+    b.type = "button";
+    b.setAttribute("aria-label", label);
+    b.title = label;
+    b.append(icon(name));
+    return b;
+  }
+
+  /* The conversation survives moving between pages of the site: the server keeps the session,
+   * the tab keeps what was shown (sessionStorage, gone with the tab). Browser mode keeps its
+   * state in memory, so there a new page starts a new chat. */
+  var STORE_KEY = "ai-consultant:" + base;
+  function loadState() {
+    try { return JSON.parse(sessionStorage.getItem(STORE_KEY)) || null; } catch (e) { return null; }
+  }
+  function saveState(state) {
+    try { sessionStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* storage off */ }
+  }
+  function forget() {
+    try { sessionStorage.removeItem(STORE_KEY); } catch (e) { /* storage off */ }
+  }
+
   function mount() {
     var target = ds.target ? document.querySelector(ds.target) : null;
     var host = el("div", "aic-host");
@@ -206,25 +252,24 @@
     root.appendChild(css);
 
     var wrap = el("div", "aic" + (target ? " aic-inline" : ""));
-    var fab = el("button", "aic-fab", "💬");
+    var fab = el("button", "aic-fab");
     fab.type = "button";
     fab.setAttribute("aria-label", "Открыть консультанта");
+    fab.append(icon("chat"));
     var panel = el("section", "aic-panel");
     panel.setAttribute("aria-label", "ИИ-консультант");
 
     var head = el("header", "aic-head");
+    var avatar = el("div", "aic-avatar");
+    avatar.append(icon("bot"));
     var title = el("div", "aic-title", ds.title || "Консультант");
-    var status = el("div", "aic-status", MODE === "browser" ? "поиск на вашем устройстве" : "онлайн");
+    var status = el("div", "aic-status", MODE === "browser" ? "поиск на вашем устройстве" : "онлайн, отвечает сразу");
     var titles = el("div", "aic-titles");
     titles.append(title, status);
-    var how = el("label", "aic-how");
-    var howBox = el("input");
-    howBox.type = "checkbox";
-    how.append(howBox, el("span", null, "Как ищется ответ"));
-    var close = el("button", "aic-close", "×");
-    close.type = "button";
-    close.setAttribute("aria-label", "Свернуть");
-    head.append(titles, how);
+    var how = iconButton("search", "aic-icon-btn aic-how", "Как ищется ответ");
+    how.setAttribute("aria-pressed", "false");
+    var close = iconButton("close", "aic-icon-btn aic-close", "Свернуть");
+    head.append(avatar, titles, how);
     if (!target) head.append(close);
 
     var log = el("div", "aic-log");
@@ -234,18 +279,18 @@
     var fileBar = el("div", "aic-file");
     fileBar.hidden = true;
     var form = el("form", "aic-form");
-    var attach = el("button", "aic-attach", "📎");
-    attach.type = "button";
-    attach.title = "Прислать свой текст или PDF";
+    var attach = iconButton("clip", "aic-icon-btn aic-attach", "Прислать свой текст или PDF");
     var file = el("input");
     file.type = "file";
     file.hidden = true;
     var input = el("input", "aic-input");
-    input.placeholder = "Ваш вопрос…";
+    input.placeholder = "Напишите вопрос…";
     input.maxLength = 1000;
-    var send = el("button", "aic-send", "➤");
+    input.setAttribute("aria-label", "Ваш вопрос");
+    var send = el("button", "aic-send");
     send.type = "submit";
     send.setAttribute("aria-label", "Отправить");
+    send.append(icon("send"));
     var remaining = el("div", "aic-remaining");
     form.append(attach, file, input, send);
     panel.append(head, log, chips, fileBar, form, remaining);
@@ -253,31 +298,45 @@
     if (!target) wrap.append(fab);
     root.appendChild(wrap);
 
-    var engine, started = false, busy = false;
+    var engine, started = false;
+    var keep = MODE !== "browser";
+    var state = { session: null, open: false, items: [] };
+
+    function persist() {
+      if (!keep) return;
+      state.session = engine && engine.session ? engine.session() : state.session;
+      state.items = state.items.slice(-60);
+      saveState(state);
+    }
 
     function scroll() { log.scrollTop = log.scrollHeight; }
 
     function bubble(role, text) {
       var b = el("div", "aic-msg aic-" + role);
-      b.append(el("div", "aic-text", text));
+      if (text != null) b.append(el("div", "aic-text", text));
       log.append(b);
       scroll();
       return b;
     }
 
+    function userBubble(text) {
+      bubble("user", text);
+      state.items.push({ user: text });
+    }
+
     function render(r) {
+      state.items.push({ bot: r });
       var b = bubble("bot", r.text);
       b.classList.add("aic-" + r.kind);
       if (r.mode && r.mode !== "fragments" && r.kind === "answer") b.append(el("div", "aic-meta", "ответ написала модель " + r.mode + " по фрагментам"));
       (r.sources || []).forEach(function (s) {
         var d = el("details", "aic-source");
-        d.append(el("summary", null, "📄 " + s.title), el("p", null, s.text));
+        var sum = el("summary");
+        sum.append(icon("file"), el("span", null, s.title), icon("chevron", "aic-chev"));
+        d.append(sum, el("p", null, s.text));
         b.append(d);
       });
-      if (r.manager_preview) {
-        var p = el("pre", "aic-preview", r.manager_preview);
-        b.append(p);
-      }
+      if (r.manager_preview) b.append(el("pre", "aic-preview", r.manager_preview));
       if (r.search && r.search.length) {
         var t = el("div", "aic-search");
         t.append(el("div", "aic-search-head", "Как искался ответ: " + (r.kind === "unknown" ? "ни один фрагмент не прошёл порог" : "лучший фрагмент прошёл порог")));
@@ -301,21 +360,26 @@
         fileBar.hidden = !r.upload;
         fileBar.textContent = "";
         if (r.upload) {
-          var x = el("button", "aic-file-x", "×");
-          x.type = "button";
-          x.setAttribute("aria-label", "Убрать файл");
+          var x = iconButton("x", "aic-icon-btn", "Убрать файл");
           x.addEventListener("click", function () { run(function () { return engine.dropUpload(); }); });
-          fileBar.append(el("span", null, "📄 " + r.upload), x);
+          fileBar.append(icon("file"), el("span", null, r.upload), x);
         }
       }
       scroll();
     }
 
-    async function run(fn) {
-      if (busy) return;
-      busy = true;
+    // Calls go one after another: a question asked while the greeting loads waits for it
+    var queue = Promise.resolve();
+    function run(fn) {
+      queue = queue.then(function () { return step(fn); });
+      return queue;
+    }
+
+    async function step(fn) {
       send.disabled = true;
-      var wait = bubble("bot aic-typing", "…");
+      var wait = bubble("bot aic-typing");
+      wait.setAttribute("aria-label", "Консультант печатает");
+      wait.append(el("i"), el("i"), el("i"));
       try {
         var r = await fn();
         wait.remove();
@@ -325,24 +389,22 @@
         wait.remove();
         render({ kind: "error", text: "Не получилось ответить, попробуйте ещё раз." });
       } finally {
-        busy = false;
         send.disabled = false;
+        persist();
       }
     }
 
     function submit(text) {
       text = (text || "").trim();
       if (!text) return;
-      bubble("user", text);
+      userBubble(text);
       input.value = "";
       run(function () { return engine.ask(text); });
     }
 
-    function start() {
-      if (started) return;
-      started = true;
+    function makeEngine() {
       if (MODE === "browser") {
-        var load = bubble("bot aic-loading", "Загружаю модель поиска на ваше устройство (≈ 120 МБ, один раз)…");
+        var load = bubble("bot", "Загружаю модель поиска на ваше устройство (≈ 120 МБ, один раз)…");
         engine = browserEngine(function (loaded, total) {
           load.firstChild.textContent = "Загружаю модель поиска на ваше устройство: " +
             Math.round(Math.min(loaded, total) / 1048576) + " из " + Math.round(total / 1048576) + " МБ…";
@@ -352,28 +414,66 @@
           load.remove();
           bubble("bot aic-error", "Модель не загрузилась. Обновите страницу или попробуйте с компьютера.");
         });
-      } else engine = apiEngine();
+      } else engine = apiEngine(state.session);
       file.accept = engine.accept;
+    }
+
+    function start() {
+      if (started) return;
+      started = true;
+      makeEngine();
       run(function () { return engine.greet(); });
     }
 
-    function open() { wrap.classList.add("aic-open"); start(); input.focus(); }
+    function restore(saved) {
+      state = { session: saved.session, open: !!saved.open, items: [] };
+      started = true;
+      makeEngine();
+      log.classList.add("aic-restored");
+      saved.items.forEach(function (it) {
+        if (it.user != null) userBubble(it.user);
+        else render(it.bot);
+      });
+      setTimeout(function () { log.classList.remove("aic-restored"); }, 0);
+    }
+
+    function setOpen(on) {
+      wrap.classList.toggle("aic-open", on);
+      state.open = on;
+      persist();
+      if (on) scroll();
+    }
+    function open() { setOpen(true); start(); input.focus({ preventScroll: true }); }
 
     fab.addEventListener("click", open);
-    close.addEventListener("click", function () { wrap.classList.remove("aic-open"); });
-    howBox.addEventListener("change", function () { wrap.classList.toggle("aic-show-search", howBox.checked); scroll(); });
+    close.addEventListener("click", function () { setOpen(false); });
+    how.addEventListener("click", function () {
+      var on = !wrap.classList.contains("aic-show-search");
+      wrap.classList.toggle("aic-show-search", on);
+      how.setAttribute("aria-pressed", String(on));
+      scroll();
+    });
     form.addEventListener("submit", function (e) { e.preventDefault(); submit(input.value); });
     attach.addEventListener("click", function () { file.click(); });
     file.addEventListener("change", function () {
       var f = file.files[0];
       file.value = "";
       if (!f) return;
-      bubble("user", "📎 " + f.name);
+      userBubble("📎 " + f.name);
       run(function () { return engine.upload(f); });
     });
 
-    if (target || ds.open === "1") open();
-    return { open: open, ask: submit };
+    var saved = keep ? loadState() : null;
+    if (saved && saved.items && saved.items.length) {
+      restore(saved);
+      if (saved.open || target) { wrap.classList.add("aic-open"); scroll(); }
+    } else if (target || (ds.open === "1" && !window.matchMedia("(max-width: 480px)").matches)) open();
+    // ask() from a button on the page: the question goes after the greeting if the chat was closed
+    function ask(text) {
+      open();
+      queue.then(function () { submit(text); });
+    }
+    return { open: open, ask: ask, forget: forget };
   }
 
   function boot() { window.AiConsultant = mount(); }

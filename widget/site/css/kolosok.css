@@ -1,0 +1,24 @@
+/* Kolosok on top of Business Casual: price lists, notes, the footer and the chat colours. */
+:root {
+  --consultant-accent: #2f170f;
+  --consultant-accent-text: #fff;
+}
+
+.kl-price { list-style: none; padding: 0; margin: 1.25rem 0 0; }
+.kl-price li {
+  display: flex; align-items: baseline; gap: 1rem; padding: .45rem 0;
+  border-bottom: 1px dashed rgba(47, 23, 15, .22);
+}
+.kl-price li:last-child { border-bottom: 0; }
+.kl-name { flex: 1; }
+.kl-name small { display: block; font-size: .8rem; font-style: italic; color: #7a6253; }
+.kl-cost { white-space: nowrap; font-family: "Raleway", sans-serif; font-weight: 700; color: #2f170f; }
+
+.kl-note { font-size: .9rem; font-style: italic; color: #7a6253; }
+.footer a { color: inherit; }
+.kl-demo { opacity: .7; }
+.kl-credits a { color: #8c4f1a; }
+
+@media (max-width: 991.98px) {
+  .product-item-description .p-5, .about-heading-content .p-5 { padding: 2rem !important; }
+}

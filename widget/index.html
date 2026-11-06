@@ -3,21 +3,77 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Пекарня «Колосок»</title>
-<link rel="stylesheet" href="page.css">
+<meta name="description" content="Хлеб на живой закваске, выпечка и торты на заказ. Садовая, 12, каждый день с 8:00 до 20:00, доставка по городу.">
+<title>Пекарня «Колосок» — хлеб на закваске и торты на заказ</title>
+<link rel="icon" href="site/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="site/css/fonts.css">
+<link rel="stylesheet" href="site/css/styles.css">
+<link rel="stylesheet" href="site/css/kolosok.css">
 </head>
 <body>
-<header class="kl-head"><div class="kl-logo">🥖 Колосок</div><nav><span>Хлеб</span><span>Выпечка</span><span>Торты</span><span>Доставка</span></nav></header>
-<main class="kl-main">
-  <h1>Хлеб на закваске, выпечка и торты на заказ</h1>
-  <p>Вымышленная пекарня для демонстрации ИИ-консультанта. Справа внизу — виджет: спросите про цены,
-  доставку или торты, пришлите свой текст или PDF.</p>
-  <div class="kl-cards">
-    <div><b>Батон на закваске</b><span>140 ₽</span></div>
-    <div><b>Круассан сливочный</b><span>120 ₽</span></div>
-    <div><b>Медовик</b><span>1 900 ₽/кг</span></div>
-  </div>
-</main>
+<header>
+    <h1 class="site-heading text-center text-faded d-none d-lg-block">
+        <span class="site-heading-upper text-primary mb-3">Хлеб на закваске и торты на заказ</span>
+        <span class="site-heading-lower">Колосок</span>
+    </h1>
+</header>
+<nav class="navbar navbar-expand-lg navbar-dark py-lg-4" id="mainNav">
+    <div class="container">
+        <a class="navbar-brand text-uppercase fw-bold d-lg-none" href="index.html">Колосок</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Меню"><span class="navbar-toggler-icon"></span></button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav mx-auto">
+                <li class="nav-item px-lg-4 active"><a class="nav-link text-uppercase" href="index.html" aria-current="page">Главная</a></li>
+                <li class="nav-item px-lg-4"><a class="nav-link text-uppercase" href="about.html">О пекарне</a></li>
+                <li class="nav-item px-lg-4"><a class="nav-link text-uppercase" href="products.html">Меню</a></li>
+                <li class="nav-item px-lg-4"><a class="nav-link text-uppercase" href="store.html">Доставка и адрес</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+<section class="page-section clearfix">
+    <div class="container">
+        <div class="intro">
+            <img class="intro-img img-fluid mb-3 mb-lg-0 rounded" src="site/assets/img/intro.jpg" alt="Корзины с хлебом на прилавке пекарни" width="1500" height="1000">
+            <div class="intro-text left-0 text-center bg-faded p-5 rounded">
+                <h2 class="section-heading mb-4">
+                    <span class="section-heading-upper">Каждое утро</span>
+                    <span class="section-heading-lower">Свежий хлеб</span>
+                </h2>
+                <p class="mb-3">Печём хлеб на живой закваске, круассаны и пирожки, собираем торты на заказ.
+                Открыты каждый день с 8:00 до 20:00 на Садовой, 12, а курьер привозит заказы по городу
+                с 9:00 до 21:00.</p>
+                <div class="intro-button mx-auto"><a class="btn btn-primary btn-xl" href="products.html">Смотреть меню</a></div>
+            </div>
+        </div>
+    </div>
+</section>
+<section class="page-section cta">
+    <div class="container">
+        <div class="row">
+            <div class="col-xl-9 mx-auto">
+                <div class="cta-inner bg-faded text-center rounded">
+                    <h2 class="section-heading mb-4">
+                        <span class="section-heading-upper">Наше обещание</span>
+                        <span class="section-heading-lower">Свежее или вернём деньги</span>
+                    </h2>
+                    <p class="mb-0">Если изделие оказалось некачественным, напишите нам в день покупки и пришлите
+                    фото: вернём деньги или заменим. Состав и аллергены указаны на этикетке каждого изделия, а за
+                    час до закрытия, с 19:00 до 20:00, хлеб и выпечка на 20 % дешевле.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+<footer class="footer text-faded text-center py-5">
+    <div class="container">
+        <p class="m-0 small">© 2026 Пекарня «Колосок» · ул. Садовая, 12 · каждый день с 8:00 до 20:00</p>
+        <p class="m-0 mt-2 small kl-demo">Пекарня вымышленная: сайт показывает работу ИИ-консультанта. Шаблон — Business Casual
+        от Start Bootstrap (MIT), фото — Wikimedia Commons, <a href="credits.html">авторы и лицензии</a>.</p>
+    </div>
+</footer>
+<script src="site/vendor/bootstrap.bundle.min.js"></script>
+<script src="site/js/scripts.js"></script>
 <script src="widget.js" data-title="Пекарня «Колосок»" data-open="1" defer></script>
 </body>
 </html>

@@ -2,7 +2,8 @@
 
     python scripts/build_static.py dist/
 
-dist/index.html is the demo bakery page with the widget open; Build/ holds what does not change
+dist/ gets the demo bakery site from widget/ (its pages and site/) with the widget switched to the
+browser mode; Build/ holds what does not change
 between releases: transformers.js, the onnxruntime-web WebAssembly and the e5 model, each with a
 ready .gz next to it for nginx gzip_static (163 MB on disk, about 92 MB over the wire).
 
@@ -14,6 +15,7 @@ from __future__ import annotations
 
 import gzip
 import io
+import re
 import shutil
 import sys
 import tarfile
@@ -31,33 +33,14 @@ MODEL = ROOT / "models" / "multilingual-e5-small"
 MODEL_FILES = ["config.json", "tokenizer.json", "tokenizer_config.json", "onnx/model_quantized.onnx"]
 GZIP = (".wasm", ".mjs", ".js", ".onnx", ".json")
 
-PAGE = """<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Пекарня «Колосок»</title>
-<link rel="stylesheet" href="page.css">
-</head>
-<body>
-<header class="kl-head"><div class="kl-logo">🥖 Колосок</div><nav><span>Хлеб</span><span>Выпечка</span><span>Торты</span><span>Доставка</span></nav></header>
-<main class="kl-main">
-  <h1>Хлеб на закваске, выпечка и торты на заказ</h1>
-  <p>Вымышленная пекарня для демонстрации ИИ-консультанта. Справа внизу — виджет: спросите про цены,
-  доставку или торты. Поиск идёт на вашем устройстве, вопросы никуда не отправляются.</p>
-  <div class="kl-cards">
-    <div><b>Батон на закваске</b><span>140 ₽</span></div>
-    <div><b>Круассан сливочный</b><span>120 ₽</span></div>
-    <div><b>Медовик</b><span>1 900 ₽/кг</span></div>
-  </div>
-</main>
-<script src="kb-search.js"></script>
-<script src="widget.js" data-title="Пекарня «Колосок»" data-mode="browser" data-open="1"
-  data-index="kb-index.json" data-model-path="Build/" data-wasm-path="Build/transformers-{tv}/"
-  data-transformers="Build/transformers-{tv}/transformers.min.js" defer></script>
-</body>
-</html>
-"""
+PAGES = ["index.html", "about.html", "products.html", "store.html", "credits.html"]
+WIDGET_TAG = re.compile(r'<script src="widget\.js"([^>]*?) defer></script>')
+BROWSER_TAG = (
+    '<script src="kb-search.js"></script>\n'
+    r'<script src="widget.js"\1 data-mode="browser" data-index="kb-index.json" data-model-path="Build/"'
+    "\n"
+    '  data-wasm-path="Build/transformers-{tv}/" data-transformers="Build/transformers-{tv}/transformers.min.js" defer></script>'
+)
 
 
 def npm_file(package: str, version: str, inner: str) -> bytes:
@@ -80,10 +63,15 @@ def main(out: str) -> int:
     tdir = build / f"transformers-{TRANSFORMERS}"
     tdir.mkdir(parents=True)
 
-    for name in ("widget.js", "widget.css", "kb-search.js", "page.css"):
+    for name in ("widget.js", "widget.css", "kb-search.js"):
         shutil.copy(ROOT / "widget" / name, dist / name)
+    shutil.copytree(ROOT / "widget" / "site", dist / "site")
     export_index(str(dist / "kb-index.json"))
-    (dist / "index.html").write_text(PAGE.replace("{tv}", TRANSFORMERS), encoding="utf-8")
+    tag = BROWSER_TAG.replace("{tv}", TRANSFORMERS)
+    for name in PAGES:
+        html, n = WIDGET_TAG.subn(tag, (ROOT / "widget" / name).read_text(encoding="utf-8"))
+        assert n == 1, f"{name}: no widget tag"
+        (dist / name).write_text(html, encoding="utf-8")
 
     (tdir / "transformers.min.js").write_bytes(
         npm_file("@huggingface/transformers", TRANSFORMERS, "dist/transformers.min.js")

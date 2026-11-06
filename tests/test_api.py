@@ -60,3 +60,23 @@ def test_widget_texts_match_the_engine():
     ]:
         assert text in js, text
     assert engine.HANDOFF.pattern.replace("\\w*", "[а-яё]*") in js
+
+
+def test_site_pages_link_only_existing_files(client):
+    """The bakery site in widget/: every page has the widget, every local link and asset exists."""
+    import re
+    from pathlib import Path
+
+    from scripts.build_static import PAGES
+
+    widget = Path(__file__).resolve().parent.parent / "widget"
+    for name in PAGES:
+        html = (widget / name).read_text(encoding="utf-8")
+        assert client.get(f"/{name}").status_code == 200, name
+        assert len(re.findall(r'<script src="widget\.js"', html)) == 1, name
+        for ref in re.findall(r'(?:src|href)="([^"#:]+)"', html):
+            assert (widget / ref).is_file(), f"{name}: {ref}"
+    for css in (widget / "site" / "css").glob("*.css"):
+        for ref in re.findall(r'url\("?([^")]+?)"?\)', css.read_text(encoding="utf-8")):
+            if not ref.startswith("data:"):
+                assert (css.parent / ref).resolve().is_file(), f"{css.name}: {ref}"

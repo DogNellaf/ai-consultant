@@ -3,6 +3,27 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-07
+
+### Added
+
+- The demo bakery is a site of five pages on the Business Casual template (Start Bootstrap, MIT) with
+  photos from Wikimedia Commons; prices, hours and delivery on it come from the knowledge base.
+- The conversation stays when the visitor moves to another page, until the tab is closed.
+- The widget follows the site's colours and font through `--consultant-*` custom properties, and pages
+  can call `AiConsultant.open()` and `AiConsultant.ask()`.
+
+### Changed
+
+- The widget's look: Lucide icons instead of emoji, an avatar with an online mark, a typing indicator,
+  a full-screen chat on phones, and `data-open` no longer covers the page on a phone.
+- The greeting reads "Пекарня «Колосок» на связи, я ИИ-консультант".
+- The static build carries the same site pages in the browser mode.
+
+### Fixed
+
+- A question asked from a page button before the greeting arrived came out above the greeting.
+
 ## [0.2.1] - 2026-11-06
 
 ### Fixed
