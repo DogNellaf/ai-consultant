@@ -60,7 +60,6 @@ PAGE = """<!doctype html>
 """
 
 
-
 def npm_file(package: str, version: str, inner: str) -> bytes:
     tgz = CACHE / f"{package.replace('/', '-')}-{version}.tgz"
     if not tgz.exists():
