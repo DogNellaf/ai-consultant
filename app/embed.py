@@ -15,7 +15,10 @@ import numpy as np
 
 DIM = 384
 MAX_TOKENS = 512
-BATCH = 8  # fragments per run when the base is indexed: padding to the longest one costs memory
+# One text per run. The model is quantized dynamically: the scale of each run comes from the whole
+# batch, padding included, so in a batch a vector would depend on its neighbours. One at a time it
+# does not, it matches the browser, and no batch is padded to its longest text.
+BATCH = 1
 
 
 class Embedder(Protocol):
