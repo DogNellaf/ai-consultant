@@ -15,7 +15,9 @@ COPY knowledge knowledge
 COPY widget widget
 COPY scripts scripts
 
-RUN useradd --system --uid 1000 app && chown -R app /app
+# Files stay root's and read-only for the app: it writes nothing to disk (the demo store, sessions
+# and uploads live in memory). A chown -R here would copy the 118 MB model into one more layer.
+RUN useradd --system --uid 1000 app
 USER app
 
 EXPOSE 8000
