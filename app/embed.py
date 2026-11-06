@@ -15,6 +15,7 @@ import numpy as np
 
 DIM = 384
 MAX_TOKENS = 512
+BATCH = 8  # fragments per run when the base is indexed: padding to the longest one costs memory
 
 
 class Embedder(Protocol):
@@ -33,6 +34,9 @@ class E5Embedder:
         self.tokenizer.enable_padding()
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = 2
+        # Without the arena the memory of a run goes back after it: the process stays at the
+        # size of the model instead of the largest batch it has seen
+        opts.enable_cpu_mem_arena = False
         self.session = ort.InferenceSession(
             str(model_dir / "onnx" / "model_quantized.onnx"), opts, providers=["CPUExecutionProvider"]
         )
@@ -41,6 +45,8 @@ class E5Embedder:
     def embed(self, texts: list[str], kind: str) -> np.ndarray:
         if not texts:
             return np.zeros((0, DIM), dtype=np.float32)
+        if len(texts) > BATCH:
+            return np.concatenate([self.embed(texts[i : i + BATCH], kind) for i in range(0, len(texts), BATCH)])
         enc = self.tokenizer.encode_batch([f"{kind}: {t}" for t in texts])
         ids = np.array([e.ids for e in enc], dtype=np.int64)
         mask = np.array([e.attention_mask for e in enc], dtype=np.int64)

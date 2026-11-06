@@ -3,26 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Пекарня «Колосок» — демо консультанта</title>
-<style>
-  body { margin: 0; font: 16px/1.5 Georgia, serif; color: #2b1d14; background: #fbf4ec; }
-  header { padding: 28px 20px; background: #b4572b; color: #fff; }
-  header h1 { margin: 0; font-size: 28px; }
-  main { max-width: 720px; margin: 0 auto; padding: 24px 20px 120px; }
-  code { background: #f1e2d3; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
-  .note { color: #8a7363; font-size: 14px; }
-</style>
+<title>Пекарня «Колосок»</title>
+<link rel="stylesheet" href="page.css">
 </head>
 <body>
-<header><h1>Пекарня «Колосок»</h1><div>Хлеб на закваске, выпечка и торты на заказ</div></header>
-<main>
-  <p>Вымышленная пекарня для демонстрации ИИ-консультанта. Кнопка в правом нижнем углу открывает
-  чат: он отвечает по прайсу, доставке и частым вопросам, показывает источник ответа и передаёт
-  вопрос менеджеру, когда ответа в базе нет.</p>
-  <p>На сайт виджет ставится одной строкой:</p>
-  <p><code>&lt;script src="https://consultant.example.com/widget.js" defer&gt;&lt;/script&gt;</code></p>
-  <p class="note">Вымышленная компания, совпадения случайны.</p>
+<header class="kl-head"><div class="kl-logo">🥖 Колосок</div><nav><span>Хлеб</span><span>Выпечка</span><span>Торты</span><span>Доставка</span></nav></header>
+<main class="kl-main">
+  <h1>Хлеб на закваске, выпечка и торты на заказ</h1>
+  <p>Вымышленная пекарня для демонстрации ИИ-консультанта. Справа внизу — виджет: спросите про цены,
+  доставку или торты, пришлите свой текст или PDF.</p>
+  <div class="kl-cards">
+    <div><b>Батон на закваске</b><span>140 ₽</span></div>
+    <div><b>Круассан сливочный</b><span>120 ₽</span></div>
+    <div><b>Медовик</b><span>1 900 ₽/кг</span></div>
+  </div>
 </main>
-<script src="widget.js" data-title="Пекарня «Колосок»" defer></script>
+<script src="widget.js" data-title="Пекарня «Колосок»" data-open="1" defer></script>
 </body>
 </html>

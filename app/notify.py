@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import html
+import html as _html
 import logging
 
 import httpx
@@ -14,20 +14,23 @@ log = logging.getLogger(__name__)
 LIMIT = 4000  # Telegram allows 4096 characters per message
 
 
-def lead_text(lead: Lead) -> str:
+def lead_text(lead: Lead, html: bool = True) -> str:
+    """The Telegram message (HTML), or the same words as plain text for the demo preview."""
+    esc = _html.escape if html else str
+    bold = (lambda t: f"<b>{t}</b>") if html else str
     channel = "виджет на сайте" if lead.channel == "widget" else "Telegram-бот"
     lines = [
-        f"<b>Заявка №{lead.id}</b> · {channel}",
-        f"Имя: {html.escape(lead.name)}",
-        f"Телефон: {html.escape(lead.phone)}",
-        f"Вопрос: {html.escape(lead.summary)}",
+        f"{bold(f'Заявка №{lead.id}')} · {channel}",
+        f"Имя: {esc(lead.name)}",
+        f"Телефон: {esc(lead.phone)}",
+        f"Вопрос: {esc(lead.summary)}",
     ]
     dialog = [m for m in lead.history if m["content"]][-12:]
     if dialog:
-        lines += ["", "<b>Переписка</b>"]
+        lines += ["", bold("Переписка")]
         for m in dialog:
             who = "Клиент" if m["role"] == "user" else "Бот"
-            lines.append(f"{who}: {html.escape(m['content'][:400])}")
+            lines.append(f"{who}: {esc(m['content'][:400])}")
     text = "\n".join(lines)
     return text if len(text) <= LIMIT else text[: LIMIT - 1] + "…"
 

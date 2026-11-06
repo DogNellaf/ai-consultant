@@ -81,7 +81,6 @@ or sending of leads: the widget shows the message the manager would get.
 with the widget open, the index, and `Build/` with transformers.js, the onnxruntime-web WebAssembly and
 the model, each with a ready `.gz` for nginx `gzip_static` (163 MB on disk, about 92 MB over the wire).
 Nothing is loaded from a CDN. The page needs a CSP with `'wasm-unsafe-eval'` and `worker-src 'self' blob:`.
-This is how the demo runs on [dognellaf.com](https://dognellaf.com/case/ai-consultant/).
 
 transformers.js 4.3 skips the tokenizer when `localModelPath` is a full URL, so the widget passes the
 model folder as a path from the site root.
@@ -94,6 +93,20 @@ model folder as a path from the site root.
 | `DAILY_TOKEN_BUDGET` | 200 000 | the model is switched off for the rest of the day, answers come from the fragments |
 | `LLM_CONCURRENCY` | 1 | model calls wait in a queue; GigaChat gives individuals one stream |
 | `QUEUE_MAX` | 20 | more waiting and the visitor is asked to repeat in a minute |
+
+## Public demo
+
+`DEMO_LEADS=1` is for a demo open to anyone: the lead form runs to the end, but the lead is neither
+saved nor sent, and the visitor sees the message the manager would get. Strangers' names and phones are
+not kept anywhere. With an empty `DATABASE_URL` the base, sessions and uploads live in memory, so the
+demo is one container without PostgreSQL. It takes about 480 MB of RAM: the tokenizer of the
+multilingual model is about 285 MB, the model about 130 MB. This is how the demo runs on
+[dognellaf.com](https://dognellaf.com/case/ai-consultant/).
+
+```bash
+docker build -t ai-consultant .
+docker run -d -p 8000:8000 -e DEMO_LEADS=1 -e QUOTA_SALT=$(openssl rand -hex 16) ai-consultant
+```
 
 ## Models
 

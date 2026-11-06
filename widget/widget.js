@@ -133,7 +133,7 @@
       var l = { id: ++leads, name: lead.name, phone: lead.phone, summary: summary };
       var preview = managerText(l);
       lead = null;
-      return reply("lead_done", "Готово, заявка №" + l.id + ". Это демо без сервера: заявка никуда не ушла, ниже то, что менеджер получил бы в Telegram.",
+      return reply("lead_done", "Готово, заявка №" + l.id + ". Это демо: заявка никуда не ушла, ниже то, что менеджер получил бы в Telegram.",
         { buttons: EXAMPLES, lead_id: l.id, manager_preview: preview });
     }
     async function answer(q) {

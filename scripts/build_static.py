@@ -59,18 +59,6 @@ PAGE = """<!doctype html>
 </html>
 """
 
-PAGE_CSS = """
-body { margin: 0; font: 16px/1.5 Georgia, serif; color: #2b1d14; background: #fbf4ec; }
-.kl-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px;
-  background: #b4572b; color: #fff; flex-wrap: wrap; }
-.kl-logo { font-weight: 700; font-size: 20px; }
-.kl-head nav { display: flex; gap: 16px; font-size: 14px; flex-wrap: wrap; }
-.kl-main { max-width: 640px; padding: 20px; }
-.kl-main h1 { font-size: 24px; margin: 0 0 10px; }
-.kl-cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); margin-top: 16px; }
-.kl-cards div { display: flex; flex-direction: column; padding: 12px; background: #fff; border: 1px solid #ecdccd; border-radius: 10px; }
-.kl-cards span { color: #b4572b; }
-"""
 
 
 def npm_file(package: str, version: str, inner: str) -> bytes:
@@ -93,11 +81,10 @@ def main(out: str) -> int:
     tdir = build / f"transformers-{TRANSFORMERS}"
     tdir.mkdir(parents=True)
 
-    for name in ("widget.js", "widget.css", "kb-search.js"):
+    for name in ("widget.js", "widget.css", "kb-search.js", "page.css"):
         shutil.copy(ROOT / "widget" / name, dist / name)
     export_index(str(dist / "kb-index.json"))
     (dist / "index.html").write_text(PAGE.replace("{tv}", TRANSFORMERS), encoding="utf-8")
-    (dist / "page.css").write_text(PAGE_CSS.lstrip(), encoding="utf-8")
 
     (tdir / "transformers.min.js").write_bytes(
         npm_file("@huggingface/transformers", TRANSFORMERS, "dist/transformers.min.js")

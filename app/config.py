@@ -68,3 +68,7 @@ MANAGER_CHAT_ID = os.getenv("MANAGER_CHAT_ID", "")
 TELEGRAM_PROXY = os.getenv("TELEGRAM_PROXY", "")
 
 ALLOWED_ORIGINS = _list("ALLOWED_ORIGINS", "*")
+
+# A public demo: the lead form runs to the end, but the lead is neither saved nor sent, the
+# visitor sees the message the manager would get instead. No names and phones of strangers kept.
+DEMO_LEADS = os.getenv("DEMO_LEADS", "").lower() in ("1", "true", "yes")

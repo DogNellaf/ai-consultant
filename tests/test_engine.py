@@ -1,5 +1,6 @@
 import pytest
 
+from app import config
 from app.engine import CANCEL, KEEP, MANAGER, Session, normalize_phone
 from app.llm import LLMError
 from tests.conftest import FakeLLM
@@ -71,6 +72,23 @@ def test_lead_form_saves_lead_with_dialog(consultant, store, sent):
     assert sent == [lead]
     assert s.lead is None
     assert not done.counted
+
+
+def test_demo_lead_is_shown_not_kept(consultant, store, sent, monkeypatch):
+    monkeypatch.setattr(config, "DEMO_LEADS", True)
+    s = Session("s1", "widget")
+    ask(consultant, s, "Когда вы открыты?")
+    for text in (MANAGER, "Анна", "8 900 123-45-67"):
+        ask(consultant, s, text)
+    done = ask(consultant, s, KEEP)
+    assert done.kind == "lead_done" and done.lead_id == 1 and "никуда не ушла" in done.text
+    assert store.leads == [] and sent == [] and s.lead is None
+    preview = done.manager_preview
+    assert preview.startswith("Заявка №1 · виджет на сайте\nИмя: Анна\nТелефон: +79001234567")
+    assert "Клиент: Когда вы открыты?" in preview and "<b>" not in preview
+    for text in (MANAGER, "Олег", "+7 900 765 43 21", "Торт на субботу"):
+        again = ask(consultant, s, text)
+    assert again.lead_id == 2
 
 
 def test_handoff_phrase_starts_form_with_its_text(consultant):

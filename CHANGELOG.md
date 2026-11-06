@@ -3,6 +3,19 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-11-06
+
+### Added
+
+- `DEMO_LEADS=1` for a public demo: the lead form runs to the end, but the lead is neither saved nor
+  sent, the visitor sees the message the manager would get.
+
+### Changed
+
+- The demo page at `/` is the bakery site with the chat open, in the same look as the static build.
+- The API takes about 480 MB of RAM instead of 800 MB: onnxruntime runs without its memory arena and
+  the base is indexed eight fragments at a time.
+
 ## [0.1.0] - 2026-11-06
 
 ### Added

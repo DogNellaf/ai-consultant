@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 
 from . import config
 from .llm import LLM, SYSTEM, UNKNOWN, LLMError, fragments_block
+from .notify import lead_text
 from .search import Hit, Searcher, confident, shown_sources
 from .store import Lead
 
@@ -42,6 +43,7 @@ class Reply:
     tokens: int = 0
     counted: bool = False  # took one of the visitor's daily messages
     lead_id: int | None = None
+    manager_preview: str = ""  # DEMO_LEADS: what the manager would get in Telegram
 
     def as_dict(self) -> dict:
         d = self.__dict__.copy()
@@ -95,6 +97,7 @@ class Consultant:
         self.store = store
         self.llm = llm
         self.notify = notify or (lambda lead: False)
+        self.demo_leads = 0
 
     def greeting(self) -> Reply:
         return Reply(
@@ -208,6 +211,18 @@ class Consultant:
         if not summary:
             return Reply("lead", "Напишите пару слов о вопросе.", buttons=[CANCEL])
         lead = Lead(form.name, form.phone, summary, s.channel, history=list(s.history))
+        if config.DEMO_LEADS:
+            self.demo_leads += 1
+            lead.id = self.demo_leads
+            s.lead = None
+            return Reply(
+                "lead_done",
+                f"Готово, заявка №{lead.id}. Это демо: заявка никуда не ушла, "
+                "ниже то, что менеджер получил бы в Telegram.",
+                buttons=EXAMPLES,
+                lead_id=lead.id,
+                manager_preview=lead_text(lead, html=False),
+            )
         lead_id = self.store.save_lead(lead)
         sent = False
         try:
