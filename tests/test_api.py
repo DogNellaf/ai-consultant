@@ -35,31 +35,9 @@ def test_bad_upload_is_400(client):
 def test_widget_and_demo_page(client):
     assert client.get("/widget.js").status_code == 200
     assert client.get("/widget.css").status_code == 200
-    assert client.get("/kb-search.js").status_code == 200
     assert "widget.js" in client.get("/").text
-    assert 'data-mode="browser"' in client.get("/browser.html").text
+    assert client.get("/browser.html").status_code == 404  # the browser mode is gone with the model
     assert client.get("/health").json() == {"ok": True}
-
-
-def test_widget_texts_match_the_engine():
-    """Browser mode repeats app/engine.py in JS: the visitor sees the same words in both modes."""
-    from pathlib import Path
-
-    from app import engine
-
-    js = (Path(engine.__file__).parent.parent / "widget" / "widget.js").read_text(encoding="utf-8")
-    for text in [
-        engine.MANAGER,
-        engine.CANCEL,
-        engine.KEEP,
-        *engine.EXAMPLES,
-        "В базе знаний нет ответа на этот вопрос, гадать не буду.",
-        "Передам вопрос менеджеру вместе с нашей перепиской. Как к вам обращаться?",
-        "Не похоже на номер. Например: +7 900 123-45-67.",
-        "Это демо: заявка никуда не ушла, ниже то, что менеджер получил бы в Telegram.",
-    ]:
-        assert text in js, text
-    assert engine.HANDOFF.pattern.replace("\\w*", "[а-яё]*") in js
 
 
 def test_site_pages_link_only_existing_files(client):
@@ -67,10 +45,8 @@ def test_site_pages_link_only_existing_files(client):
     import re
     from pathlib import Path
 
-    from scripts.build_static import PAGES
-
     widget = Path(__file__).resolve().parent.parent / "widget"
-    for name in PAGES:
+    for name in ("index.html", "products.html", "store.html", "about.html", "credits.html"):
         html = (widget / name).read_text(encoding="utf-8")
         assert client.get(f"/{name}").status_code == 200, name
         assert len(re.findall(r'<script src="widget\.js"', html)) == 1, name

@@ -1,8 +1,8 @@
 """The consultant: one engine for the site widget and the Telegram bot.
 
-A question goes through the hybrid search. Without a model the answer is the found fragment
-itself; with a model it is written from the top fragments, and the model must say НЕ_ЗНАЮ when
-they have no answer. Either way a weak match gets an honest "don't know" and an offer to pass
+A question goes through the search (search.py). Without a model the answer is the found fragment
+itself; with a model it is written from the top fragments, the model names the fragments it used,
+and it must say НЕ_ЗНАЮ when they have no answer. Either way a weak match gets an honest "don't know" and an offer to pass
 the question to a manager, who then gets a lead with the whole dialog.
 """
 
@@ -30,6 +30,7 @@ HANDOFF = re.compile(
     re.IGNORECASE,
 )
 PHONE_CHARS = re.compile(r"[\s()\-.]")
+CITED = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 
 
 @dataclass
@@ -71,6 +72,18 @@ class Session:
     @property
     def collections(self) -> list[str]:
         return ["kb", f"upload:{self.id}"] if self.upload else ["kb"]
+
+
+def cited_fragments(text: str, n: int) -> tuple[str, list[int]]:
+    """The answer without its "[1, 3]" marks and the 0-based fragments it named, in order, valid only."""
+    cited: list[int] = []
+    for m in CITED.finditer(text):
+        for x in m.group(1).split(","):
+            i = int(x) - 1
+            if 0 <= i < n and i not in cited:
+                cited.append(i)
+    clean = re.sub(r"\s+([.,!?])", r"\1", CITED.sub("", text)).strip()
+    return clean, cited
 
 
 def wants_manager(text: str) -> bool:
@@ -124,16 +137,18 @@ class Consultant:
 
     def _answer(self, s: Session, question: str, use_model: bool) -> Reply:
         s.last_question = question
-        hits = self.searcher.search(question, s.collections)
-        search = [h.as_dict() for h in hits]
+        hits = self.searcher.search(question, s.collections, max(config.TOP_K, config.TOP_K_LLM))
         best = hits[0] if hits else None
         model = self.llm if use_model else None
 
         if model and confident(best, with_model=True):
+            top = hits[: config.TOP_K_LLM]
             try:
-                return self._model_answer(s, question, hits, model, search)
+                return self._model_answer(s, question, top, model, [h.as_dict() for h in top])
             except LLMError as e:
                 log.warning("model failed, answering from fragments: %s", e)
+        hits = hits[: config.TOP_K]
+        search = [h.as_dict() for h in hits]
         if confident(best, with_model=False):
             shown = shown_sources(hits)
             return Reply(
@@ -150,11 +165,12 @@ class Consultant:
         system = SYSTEM.format(company=config.COMPANY, fragments=fragments_block(hits))
         messages = [m for m in s.history[-6:]] + [{"role": "user", "content": question}]
         done = model.complete(system, messages)
-        if UNKNOWN in done.text or not done.text:
+        text, cited = cited_fragments(done.text, len(hits))
+        if UNKNOWN in text or not text:
             reply = self._unknown(search, counted=True)
         else:
-            shown = shown_sources(hits)
-            reply = Reply("answer", done.text, sources=[h.as_dict() for h in shown], search=search, counted=True)
+            shown = [hits[i] for i in cited] or shown_sources(hits)
+            reply = Reply("answer", text, sources=[h.as_dict() for h in shown], search=search, counted=True)
         reply.mode, reply.tokens = model.name, done.tokens
         return reply
 

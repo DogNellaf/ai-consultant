@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: t
           POSTGRES_PASSWORD: t
@@ -25,27 +25,7 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: pip install -r requirements.txt -r requirements-dev.txt
-      - uses: actions/cache@v4
-        with:
-          path: models
-          key: e5-small-int8-v1
-      - run: python scripts/download_model.py
       - run: ruff check . && ruff format --check .
       - run: pytest
         env:
           TEST_DATABASE_URL: postgresql://t:t@localhost:5432/t
-      - name: kb-index.json is up to date with the base
-        # The int8 kernels of onnxruntime differ between runner CPUs (up to 0.007 per number), so the
-        # texts must match exactly and every vector must point the same way (cosine)
-        run: |
-          python scripts/export_index.py /tmp/kb-index.json
-          python - <<'EOF'
-          import json
-          a = json.load(open("/tmp/kb-index.json", encoding="utf-8"))
-          b = json.load(open("widget/kb-index.json", encoding="utf-8"))
-          strip = lambda d: {**d, "chunks": [{k: v for k, v in c.items() if k != "vec"} for c in d["chunks"]]}
-          assert strip(a) == strip(b), "widget/kb-index.json is stale: run scripts/export_index.py"
-          cos = min(sum(x * y for x, y in zip(ca["vec"], cb["vec"])) for ca, cb in zip(a["chunks"], b["chunks"]))
-          assert cos > 0.995, cos
-          print("min cosine", round(cos, 5))
-          EOF

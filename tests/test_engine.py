@@ -37,6 +37,30 @@ def test_model_writes_answer_from_fragments(consultant):
     assert messages[-1] == {"role": "user", "content": "Сколько стоит доставка?"}
 
 
+def test_model_names_its_fragments(consultant):
+    # the fragments go numbered, the answer names the ones it used: those are shown as sources
+    consultant.llm = FakeLLM("За город доставка стоит 600 ₽ [2]. По городу — 250 ₽ [1].")
+    r = ask(consultant, Session("s1", "widget"), "Сколько стоит доставка?")
+    system, _ = consultant.llm.calls[0]
+    numbered = dict(line[1:].split("] ", 1) for line in system.splitlines() if line[:1] == "[" and "] " in line)
+    assert r.text == "За город доставка стоит 600 ₽. По городу — 250 ₽."
+    assert [s["title"] for s in r.sources] == [numbered["2"], numbered["1"]]
+    assert len(r.search) == config.TOP_K_LLM  # the visitor sees every fragment the model got
+
+
+def test_model_without_marks_or_with_wrong_ones(consultant):
+    consultant.llm = FakeLLM("Доставка по городу стоит 250 ₽. [9]")
+    r = ask(consultant, Session("s1", "widget"), "Сколько стоит доставка?")
+    assert r.text == "Доставка по городу стоит 250 ₽."
+    assert r.sources and r.sources[0]["title"] == "Доставка и оплата › Доставка по городу"
+
+
+def test_off_topic_question_does_not_reach_the_model(consultant):
+    consultant.llm = FakeLLM()
+    r = ask(consultant, Session("s1", "widget"), "Помогите написать курсовую по истории")
+    assert r.kind == "unknown" and consultant.llm.calls == []
+
+
 def test_model_unknown_marker(consultant):
     consultant.llm = FakeLLM("НЕ_ЗНАЮ")
     r = ask(consultant, Session("s1", "widget"), "Сколько стоит доставка?")

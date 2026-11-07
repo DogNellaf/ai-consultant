@@ -86,7 +86,5 @@ async def upload_delete(body: Ask, request: Request):
     return _out(service, s, _visitor(request), service.drop_upload(s))
 
 
-# The model for the browser mode (browser.html) and the widget files with the demo pages.
-if config.MODEL_DIR.exists():
-    app.mount("/models/multilingual-e5-small", StaticFiles(directory=config.MODEL_DIR), name="models")
+# The widget files with the demo pages.
 app.mount("/", StaticFiles(directory=WIDGET, html=True), name="widget")

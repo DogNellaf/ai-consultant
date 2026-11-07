@@ -39,7 +39,7 @@ def render(reply: Reply, show_search: bool) -> str:
         parts.append("\n".join(f"📄 <i>{html.escape(src['title'])}</i>" for src in reply.sources))
     if show_search and reply.search:
         rows = [
-            f"{i}. {html.escape(h['title'])} — сходство {h['dense']:.3f}, слова {h['lexical']:.2f}"
+            f"{i}. {html.escape(h['title'])} — слова {h['lexical']:.2f}, буквы {h['grams']:.2f}"
             for i, h in enumerate(reply.search, 1)
         ]
         parts.append("<b>Как искался ответ</b>\n" + "\n".join(rows))

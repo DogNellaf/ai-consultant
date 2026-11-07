@@ -1,78 +1,95 @@
-"""Hybrid search: e5 similarity picks candidates, word overlap reranks them and decides
-whether the base has an answer at all.
+"""Search without a model: the question's words and the pieces of its words, in every fragment.
 
-widget/kb-search.js repeats this file step by step for the browser mode.
+Each fragment gets two numbers: the share of the question's words it has, weighted by rarity
+(lexical.py), and the share of the question's character 4-grams (grams.py), which catches changed
+endings and typos. The score is words plus half the 4-grams. A base of a few dozen fragments, or a
+visitor's PDF of a hundred, is scored whole in a millisecond; nothing is downloaded, nothing sits
+in memory but the texts.
+
+With a model the best fragments go to it, and the model itself says when they have no answer.
+Without one the best fragment is the answer, so the bar is higher: most of the question's words,
+or a good share of them backed by the 4-grams.
 """
 
 from __future__ import annotations
 
+import threading
+from collections import Counter
 from dataclasses import dataclass
 
 from . import config
+from .grams import containment, grams
 from .kb import Chunk
 from .lexical import idf, overlap, stems
 
-CANDIDATES = 12
-LEXICAL_WEIGHT = 0.1
+GRAMS_WEIGHT = 0.5
 
 
 @dataclass
 class Hit:
     chunk: Chunk
-    dense: float
     lexical: float
+    grams: float
 
     @property
     def score(self) -> float:
-        return self.dense + LEXICAL_WEIGHT * self.lexical
+        return self.lexical + GRAMS_WEIGHT * self.grams
 
     def as_dict(self) -> dict:
         return {
             "source": self.chunk.source,
             "title": self.chunk.title,
             "text": self.chunk.text,
-            "dense": round(self.dense, 3),
             "lexical": round(self.lexical, 2),
+            "grams": round(self.grams, 2),
             "score": round(self.score, 3),
         }
 
 
+@dataclass
+class _Indexed:
+    chunk: Chunk
+    stems: list[str]
+    grams: Counter
+
+
 class Searcher:
-    def __init__(self, store, embedder):
-        self.store = store
-        self.embedder = embedder
-        self._stems: dict[tuple[str, ...], list[list[str]]] = {}
+    """Fragments by collection: "kb" for the base, "upload:<session>" for a visitor's file."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._collections: dict[str, list[_Indexed]] = {}
 
     def index(self, collection: str, chunks: list[Chunk]) -> int:
-        vectors = self.embedder.embed([c.passage for c in chunks], "passage")
-        self.store.replace_collection(collection, chunks, vectors)
-        self._stems.clear()
-        return len(chunks)
+        items = [_Indexed(c, stems(c.passage), grams(c.passage)) for c in chunks]
+        with self._lock:
+            self._collections[collection] = items
+        return len(items)
 
     def drop(self, collection: str) -> None:
-        self.store.delete_collection(collection)
-        self._stems.clear()
+        with self._lock:
+            self._collections.pop(collection, None)
 
-    def _corpus(self, collections: list[str]) -> list[list[str]]:
-        key = tuple(sorted(collections))
-        if key not in self._stems:
-            self._stems[key] = [stems(c.passage) for c in self.store.chunks(collections)]
-        return self._stems[key]
+    def chunks(self, collections: list[str]) -> list[Chunk]:
+        return [i.chunk for col in collections for i in self._collections.get(col, [])]
 
     def search(self, question: str, collections: list[str], k: int | None = None) -> list[Hit]:
-        vec = self.embedder.embed([question], "query")[0]
-        cands = self.store.nearest(vec, collections, CANDIDATES)
-        q = stems(question)
-        weights = idf(q, self._corpus(collections))
-        hits = [Hit(c, dense, overlap(q, stems(c.passage), weights)) for c, dense in cands]
+        items = [i for col in collections for i in self._collections.get(col, [])]
+        q, qg = stems(question), grams(question)
+        weights = idf(q, [i.stems for i in items])
+        hits = [Hit(i.chunk, overlap(q, i.stems, weights), containment(qg, i.grams)) for i in items]
         hits.sort(key=lambda h: -h.score)
         return hits[: k or config.TOP_K]
 
 
 def confident(hit: Hit | None, with_model: bool) -> bool:
-    if hit is None or hit.dense < config.MIN_DENSE:
+    if hit is None:
         return False
-    return hit.lexical >= (config.MIN_LEXICAL_LLM if with_model else config.MIN_LEXICAL)
+    if with_model:
+        return hit.score >= config.MIN_SCORE_LLM
+    return hit.lexical >= config.MIN_LEXICAL_ALONE or (
+        hit.lexical >= config.MIN_LEXICAL and hit.grams >= config.MIN_GRAMS
+    )
 
 
 def shown_sources(hits: list[Hit]) -> list[Hit]:

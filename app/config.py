@@ -23,7 +23,6 @@ def _list(name: str, default: str = "") -> list[str]:
 
 COMPANY = os.getenv("COMPANY", "Пекарня «Колосок»")
 KB_DIR = Path(os.getenv("KB_DIR", str(ROOT / "knowledge" / "kolosok")))
-MODEL_DIR = Path(os.getenv("MODEL_DIR", str(ROOT / "models" / "multilingual-e5-small")))
 
 # Empty DATABASE_URL keeps everything in memory (tests, a quick look); Docker sets PostgreSQL.
 DATABASE_URL = os.getenv("DATABASE_URL", "")
@@ -34,18 +33,25 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "none").lower()
 GIGACHAT_AUTH_KEY = os.getenv("GIGACHAT_AUTH_KEY", "")  # "Authorization key" from the Sber cabinet
 GIGACHAT_SCOPE = os.getenv("GIGACHAT_SCOPE", "GIGACHAT_API_PERS")
 GIGACHAT_MODEL = os.getenv("GIGACHAT_MODEL", "GigaChat-2")
-GIGACHAT_CA_BUNDLE = os.getenv("GIGACHAT_CA_BUNDLE", "")  # Russian Trusted Root CA, see README
+# GigaChat's certificates chain to the Russian Trusted Root CA, which is not in the usual bundles:
+# the repository carries it in certs/
+_CA = ROOT / "certs" / "russian_trusted_ca.pem"
+GIGACHAT_CA_BUNDLE = os.getenv("GIGACHAT_CA_BUNDLE", str(_CA) if _CA.exists() else "")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "")
 LLM_TIMEOUT = _float("LLM_TIMEOUT", 60)
 
-# Search. A question is answered when the best fragment passes both thresholds; with a model the
-# word overlap may be lower, the model itself says when the fragments have no answer.
+# Search (search.py). With a model the TOP_K_LLM best fragments go to it whenever the best one scores
+# MIN_SCORE_LLM, and the model says when they have no answer. Without a model the best fragment is
+# the answer when it has MIN_LEXICAL_ALONE of the question's words, or MIN_LEXICAL of them and
+# MIN_GRAMS of its 4-grams.
 TOP_K = _int("TOP_K", 3)
-MIN_DENSE = _float("MIN_DENSE", 0.79)
-MIN_LEXICAL = _float("MIN_LEXICAL", 0.40)
-MIN_LEXICAL_LLM = _float("MIN_LEXICAL_LLM", 0.20)
+TOP_K_LLM = _int("TOP_K_LLM", 5)
+MIN_SCORE_LLM = _float("MIN_SCORE_LLM", 0.25)
+MIN_LEXICAL_ALONE = _float("MIN_LEXICAL_ALONE", 0.6)
+MIN_LEXICAL = _float("MIN_LEXICAL", 0.4)
+MIN_GRAMS = _float("MIN_GRAMS", 0.3)
 SECOND_SOURCE_GAP = _float("SECOND_SOURCE_GAP", 0.03)
 
 # Limits. GigaChat gives individuals one stream, so model calls go through a queue of one.

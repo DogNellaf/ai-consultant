@@ -1,12 +1,8 @@
-"""Word overlap between a question and a fragment, the second half of the hybrid search.
+"""Word overlap between a question and a fragment, weighted by rarity: the main half of the search.
 
-e5 similarity alone does not separate "not in the base" well: on the Kolosok base the weakest
-question that is in the base scored 0.802 and "how much is an iPhone 15 repair" 0.812. A question
-that shares no meaningful word with the best fragment is almost always off topic, so the
-overlap decides the "don't know".
-
-The stemming is a crude prefix cut on purpose: it is written the same way in widget/kb-search.js,
-so the browser and the server agree on every number.
+A question that shares no meaningful word with the best fragment is almost always off topic, so
+the overlap decides the "don't know" when there is no model. The stemming is a crude prefix cut
+on purpose: doc-check uses the same file, so both projects agree on every number.
 """
 
 from __future__ import annotations

@@ -59,11 +59,11 @@ def test_empty_text_greets(service):
 def test_session_expires_with_its_upload(service, monkeypatch):
     s = service.session(None, "widget")
     run(service.upload(s, "notes.txt", "Пароль от вайфая в зале: колосок2026.".encode()))
-    assert service.store.chunks([f"upload:{s.id}"])
+    assert service.consultant.searcher.chunks([f"upload:{s.id}"])
     monkeypatch.setattr(config, "SESSION_TTL", -1)
     service.session(None, "widget")
     assert s.id not in service.sessions
-    assert service.store.chunks([f"upload:{s.id}"]) == []
+    assert service.consultant.searcher.chunks([f"upload:{s.id}"]) == []
 
 
 def test_upload_is_searched_with_the_base(service):
@@ -73,7 +73,7 @@ def test_upload_is_searched_with_the_base(service):
     a = run(service.ask(s, "v1", "Когда бывает пирог с тыквой?"))
     assert a.kind == "answer" and a.sources[0]["source"] == "menu.txt"
     service.drop_upload(s)
-    assert service.store.chunks([f"upload:{s.id}"]) == []
+    assert service.consultant.searcher.chunks([f"upload:{s.id}"]) == []
 
 
 def test_lead_text_escapes_and_includes_dialog():

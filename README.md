@@ -15,9 +15,8 @@ The demo base is Kolosok, a made-up bakery: prices, delivery and payment, freque
 docker compose up --build
 ```
 
-Open http://localhost:8000/ for the demo bakery site with the widget on the server,
-http://localhost:8000/browser.html for the mode where the search runs on the visitor's device. Nothing to configure: without a model key the
-answers are the found fragments.
+Open http://localhost:8000/ for the demo bakery site with the widget. Nothing to configure: without a
+model key the answers are the found fragments. With a GigaChat key in `.env` the model writes them.
 
 The bot needs `TELEGRAM_BOT_TOKEN` in `.env` (see `.env.example`): `docker compose --profile bot up`.
 
@@ -46,15 +45,17 @@ site and the consultant never disagree.
 1. **Base.** Markdown files in `knowledge/<company>/`, each `## ` section is a fragment, titles in
    front ("Delivery and payment › Pickup"). An uploaded `.txt`, `.md` or `.pdf` (up to 300 KB and 20
    pages) is cut the same way and kept for the session only.
-2. **Search.** Hybrid. The local `multilingual-e5-small` model (int8 ONNX, 118 MB, about 10 ms per
-   question on a CPU, no API) finds 12 candidates in PostgreSQL with pgvector. Then each candidate gets
-   the weighted share of the question's words it contains, rare words weighing more, and the two numbers
-   are combined.
-3. **Answer or "don't know".** The best fragment must pass both thresholds: meaning ≥ 0.79 and words ≥ 0.40.
-   Without a model the answer is the fragment itself, plus the second one when it is almost as good
-   ("how much is delivery" gets both the city and the out-of-town price). With a model (GigaChat or any
-   OpenAI-compatible API) the words threshold drops to 0.20 and the model writes the answer from the top
-   three fragments, replying `НЕ_ЗНАЮ` when they do not have it.
+2. **Search.** No neural model and nothing to download. Each fragment gets two numbers: the share of
+   the question's words it has, rare words weighing more ("медовик" is in one fragment, "стоит" in
+   many), and the share of the question's character 4-grams, which survive changed endings and typos.
+   The score is words plus half the 4-grams. The base is scored whole in about a millisecond.
+3. **Answer or "don't know".** With a model (GigaChat or any OpenAI-compatible API) the five best
+   fragments go to it, numbered, whenever the best one scores 0.25; the model writes the answer, names
+   the fragments it used (they are shown under the answer) and replies `НЕ_ЗНАЮ` when they do not have
+   it. A question that shares nothing with the base never reaches the model. Without a model the best
+   fragment is the answer when it has 60 % of the question's words, or 40 % of them and 30 % of the
+   4-grams, plus the second fragment when it is almost as good ("how much is delivery" gets both the
+   city and the out-of-town price).
 4. **Manager.** "Call a manager", or a phrase like "call me back", starts a short form: name, phone
    (checked and normalized), what to pass on. The lead is saved first, then sent to `MANAGER_CHAT_ID`.
    A Telegram failure does not lose it.
@@ -62,42 +63,16 @@ site and the consultant never disagree.
 The "how the answer is searched" switch shows every candidate with both numbers, so a client sees why
 the consultant answered or refused.
 
-### Why hybrid
+### Why no neural model
 
-e5 similarity alone does not separate "not in the base". On the demo base the weakest question that is
-in the base ("Почём медовик?") scored 0.802, and "how much is an iPhone 15 repair" scored 0.812. The
-words do separate them: the iPhone question shares only "how much" with the base, and "how much" is in
-many price fragments, so it weighs little. The thresholds are tuned on 21 questions in
-`knowledge/kolosok/smoke.json` and the eval during development.
-
-The honest cost is a few refusals where the base does have the answer in other words: "Привезёте торт
-завтра?" (will you deliver a cake tomorrow) shares too few words with the delivery fragments, so the
-consultant offers a manager. With a model on, the lower words threshold lets these through.
-
-## Browser mode
-
-`data-mode="browser"` runs the same search on the visitor's device with transformers.js and the same
-ONNX file, so the demo costs nothing and nothing leaves the device. `scripts/export_index.py` writes
-`kb-index.json` with the fragments, their vectors, the thresholds and the stop words, and
-`widget/kb-search.js` repeats `app/lexical.py` and `app/search.py` step by step. On the 21 test
-questions both modes reach the same answer-or-refuse decision; the vectors differ in the third decimal
-place because the browser runs a different onnxruntime build. In this mode there is no model, PDF reading
-or sending of leads: the widget shows the message the manager would get.
-
-```html
-<script src="kb-search.js"></script>
-<script src="widget.js" data-mode="browser" data-index="kb-index.json" data-model-path="/models/" defer></script>
-```
-
-### Static build
-
-`python scripts/build_static.py dist/` makes a folder any web server can host: the demo bakery page
-with the widget open, the index, and `Build/` with transformers.js, the onnxruntime-web WebAssembly and
-the model, each with a ready `.gz` for nginx `gzip_static` (163 MB on disk, about 92 MB over the wire).
-Nothing is loaded from a CDN. The page needs a CSP with `'wasm-unsafe-eval'` and `worker-src 'self' blob:`.
-
-transformers.js 4.3 skips the tokenizer when `localModelPath` is a full URL, so the widget passes the
-model folder as a path from the site root.
+Up to version 0.3 the search ran `multilingual-e5-small` on onnxruntime, and the container took about
+480 MB of memory, most of it the multilingual tokenizer. On a small base the words and their pieces
+rank the right fragment first just as well: all 16 questions from the base in
+`knowledge/kolosok/smoke.json` find their fragment first, and all 7 off-topic ones get "don't know"
+without a model. What a neural search did better was a paraphrase with few shared words ("Вы работаете
+в воскресенье?" for the opening hours): the search still ranks it first, but cannot vouch for it
+alone, so without a model it gets "don't know", and with one the model answers it. Such questions are
+marked `needs_model` in the smoke file.
 
 ## Limits
 
@@ -113,8 +88,8 @@ model folder as a path from the site root.
 `DEMO_LEADS=1` is for a demo open to anyone: the lead form runs to the end, but the lead is neither
 saved nor sent, and the visitor sees the message the manager would get. Strangers' names and phones are
 not kept anywhere. With an empty `DATABASE_URL` the base, sessions and uploads live in memory, so the
-demo is one container without PostgreSQL. It takes about 480 MB of RAM: the tokenizer of the
-multilingual model is about 285 MB, the model about 130 MB. This is how the demo runs on
+demo is one container without PostgreSQL. It takes about 40 MB of memory and starts in a few
+seconds. This is how the demo runs on
 [dognellaf.com](https://dognellaf.com/case/ai-consultant/).
 
 ```bash
@@ -130,37 +105,37 @@ docker run -d -p 8000:8000 -e DEMO_LEADS=1 -e QUOTA_SALT=$(openssl rand -hex 16)
 GigaChat terms matter here: the freemium for individuals (365M tokens a year) is for personal
 non-commercial use only. A consultant on a client's site needs a paid package (from 1,300 ₽ a month for
 20M GigaChat 2 Lite tokens for individuals) or the client's own company contract. GigaChat uses
-certificates of the Russian Trusted Root CA: download the bundle from Gosuslugi and set
-`GIGACHAT_CA_BUNDLE`.
+certificates of the Russian Trusted Root CA; the repository carries it in `certs/` and uses it by
+default (`GIGACHAT_CA_BUNDLE` points elsewhere if needed). A question with five fragments costs about
+1 500–2 000 tokens.
 
 ## Data
 
 The demo base is made up. Leads (name, phone, dialog) are kept in PostgreSQL on the client's server, and
 usage rows store only a salted hash of the visitor. An uploaded file lives in memory and in the session's
 collection and is dropped with the session (1 hour). With GigaChat the questions and fragments stay in
-Russia; with the browser mode they stay on the visitor's device.
+Russia; without a model nothing leaves the server.
 
 ## Development
 
 ```bash
 python -m venv .venv && .venv/Scripts/pip install -r requirements.txt -r requirements-dev.txt
-python scripts/download_model.py
-pytest                                   # 61 tests; the smoke runs on the real model
+pytest                                   # the smoke runs on the real base and thresholds
 TEST_DATABASE_URL=postgresql://... pytest tests/test_pgstore.py
 ruff check . && ruff format --check .
 uvicorn app.api:app --reload             # in-memory store without DATABASE_URL
 ```
 
-`tests/test_smoke.py` is the acceptance check: 10 questions from the FAQ must find their fragment and 3
-off-topic ones must get "don't know".
+`tests/test_smoke.py` is the acceptance check: 16 questions from the base must find their fragment
+first, 12 of them must be answered without a model, and 7 off-topic ones must get "don't know".
 
 ## Layout
 
 ```
-app/embed.py      e5 on onnxruntime          app/engine.py     answer, "don't know", lead form
-app/kb.py         Markdown → fragments       app/service.py    sessions, limits, queue, uploads
-app/lexical.py    word overlap, IDF          app/api.py        widget API (FastAPI)
-app/search.py     hybrid search, thresholds  app/bot.py        Telegram bot (aiogram)
-app/store.py      pgvector / memory          app/llm.py        GigaChat, OpenAI-compatible
-widget/           widget.js, kb-search.js, demo pages        knowledge/kolosok/  the demo base
+app/kb.py         Markdown → fragments       app/engine.py     answer, "don't know", lead form
+app/lexical.py    word overlap, IDF          app/service.py    sessions, limits, queue, uploads
+app/grams.py      character 4-grams          app/api.py        widget API (FastAPI)
+app/search.py     search, thresholds         app/bot.py        Telegram bot (aiogram)
+app/store.py      leads, usage: PostgreSQL / memory          app/llm.py  GigaChat, OpenAI-compatible
+widget/           widget.js, demo pages      knowledge/kolosok/  the demo base
 ```

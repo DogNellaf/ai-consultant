@@ -30,7 +30,7 @@ class Chunk:
 
     @property
     def passage(self) -> str:
-        """What the model embeds: titles plus the text."""
+        """What the search reads: titles plus the text."""
         return f"{self.title}. {self.text}"
 
 

@@ -3,6 +3,26 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-07
+
+### Changed
+
+- No neural model: the search scores fragments by the question's words, weighted by rarity, and by
+  its character 4-grams. All 16 questions from the base in `smoke.json` find their fragment first and
+  all 7 off-topic ones get "don't know" without a model. The container needs about 40 MB of memory
+  instead of 480 MB, and the image is 270 MB.
+- With a model the five best fragments go to it numbered, the model names the ones it used, and those
+  are shown under the answer. A question that shares nothing with the base does not reach the model.
+- PostgreSQL keeps only leads and usage, without pgvector.
+
+### Added
+
+- The Russian Trusted Root CA in `certs/`, used for GigaChat by default.
+
+### Removed
+
+- The browser mode, the static build, `kb-index.json` and the e5 model with onnxruntime and tokenizers.
+
 ## [0.3.1] - 2026-11-07
 
 ### Fixed
