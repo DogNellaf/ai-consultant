@@ -9,6 +9,11 @@ offers a manager, who gets the lead in Telegram with the whole dialog.
 
 The demo base is Kolosok, a made-up bakery: prices, delivery and payment, frequent questions.
 
+
+`/demo.html` shows a large chat next to the bakery context; `/demo.html?channel=telegram` is an explicitly labelled browser preview of the Telegram channel. It uses the real API in `DEMO_LEADS=1` mode and does not connect to Telegram.
+
+Quotas are reserved atomically in memory or PostgreSQL. The token budget is rechecked after waiting for the model slot; the last started completion may exceed this soft threshold. Transport errors and malformed provider responses fall back to matching fragments.
+
 ## Quick start
 
 ```bash
@@ -86,8 +91,12 @@ marked `needs_model` in the smoke file.
 ## Public demo
 
 `DEMO_LEADS=1` is for a demo open to anyone: the lead form runs to the end, but the lead is neither
-saved nor sent, and the visitor sees the message the manager would get. Strangers' names and phones are
-not kept anywhere. With an empty `DATABASE_URL` the base, sessions and uploads live in memory, so the
+saved to the leads table nor sent; visitors see a manager-message preview and can use fictional contacts.
+Form contacts are excluded from model conversation history. Visible conversation and previews remain in
+tab sessionStorage; unfinished forms, question history and uploads stay in server memory for up to an hour
+of inactivity (cleanup runs at least once a minute). `await AiConsultant.forget()` deletes the server
+session, its upload and saved tab history. Reset preserves daily quotas. Questions and matching fragments
+are sent to the model provider. With an empty `DATABASE_URL` the base, sessions and uploads live in memory, so the
 demo is one container without PostgreSQL. It takes about 40 MB of memory and starts in a few
 seconds. This is how the demo runs on
 [dognellaf.com](https://dognellaf.com/case/ai-consultant/).
@@ -113,8 +122,9 @@ default (`GIGACHAT_CA_BUNDLE` points elsewhere if needed). A question with five 
 
 The demo base is made up. Leads (name, phone, dialog) are kept in PostgreSQL on the client's server, and
 usage rows store only a salted hash of the visitor. An uploaded file lives in memory and in the session's
-collection and is dropped with the session (1 hour). With GigaChat the questions and fragments stay in
-Russia; without a model nothing leaves the server.
+collection and is deleted on reset or after an hour of inactivity. With a model enabled, questions,
+regular question history and matching fragments are sent to the configured external provider. Form
+contacts are separated from that context. Without a model, answers are assembled on the application server.
 
 ## Development
 

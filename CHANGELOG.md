@@ -3,6 +3,21 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-14
+
+### Fixed
+
+- Preserve Markdown structure on upload and reject empty indexing without replacing the previous file.
+- Fall back to fragments on provider transport/payload errors; show explicit refusal reasons.
+- Exclude the lead form from model history and delete server sessions/uploads on reset; periodic TTL cleanup.
+- Atomically reserve question quotas in memory/PostgreSQL and recheck token budget after queueing.
+
+### Added
+
+- Large responsive demo chat, fictional form contacts and a labelled browser preview of the Telegram channel.
+- Finite widget request timeout, retry control and explicit storage/provider documentation.
+- Regression tests for uploads, failures, contact isolation, reset and concurrent quotas.
+
 ## [0.4.0] - 2026-11-07
 
 ### Changed

@@ -1,0 +1,39 @@
+:root { --consultant-accent: #8d421f; --consultant-font: system-ui, -apple-system, "Segoe UI", sans-serif; color: #30241b; background: #faf5ed; font: 14px/1.5 var(--consultant-font); }
+* { box-sizing: border-box; }
+body { margin: 0; height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+a { color: inherit; }
+.demo-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 28px; border-bottom: 1px solid #e7d9c7; flex-shrink: 0; }
+.brand { display: flex; align-items: center; gap: 8px; text-decoration: none; font: 700 28px Georgia, serif; letter-spacing: -1px; }
+.brand > span:first-child { color: #8d421f; }
+.brand-mark { width: 26px; height: 26px; flex: none; fill: none; stroke: #8d421f; stroke-width: 2; stroke-linecap: round; }
+.brand-sub { font: 9px/1.4 var(--consultant-font); letter-spacing: 1.5px; max-width: 85px; padding-left: 8px; border-left: 1px solid #cbbb9f; }
+.demo-label { font-size: 12px; color: #665342; }
+.demo-layout { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 28px; flex: 1; min-height: 0; padding: 22px 28px; max-width: 1300px; width: 100%; margin: 0 auto; }
+.context { display: flex; flex-direction: column; min-height: 0; gap: 14px; overflow-y: auto; overscroll-behavior: contain; }
+.eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: #8d421f; }
+h1 { font: 400 clamp(22px, 3vw, 38px)/1.13 Georgia, serif; margin: 8px 0 10px; max-width: 420px; }
+.context-copy p { margin: 0; color: #665342; max-width: 440px; }
+.bakery-cards { border: 1px solid #e7d9c7; border-radius: 14px; overflow: hidden; flex: 0 0 auto; background: #fff; display: grid; grid-template-columns: 42% 1fr; min-height: 118px; }
+.bread-photo { background: url("site/assets/img/intro.jpg") center/cover; }
+.product { display: flex; flex-direction: column; justify-content: center; padding: 16px; gap: 4px; }
+.product b { font: 400 22px Georgia, serif; }
+.product span { color: #665342; font-size: 12px; }
+.context-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.context-actions button { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #773514; background: #f2e6d6; border: 1px solid #dac4aa; border-radius: 10px; padding: 10px 12px; text-align: left; cursor: pointer; font: 600 12px/1.4 var(--consultant-font); }
+.context-actions button:hover { background: #ead9c2; }
+.context-note { color: #665342; font-size: 12px; margin: 0; }
+.bakery-link { font-size: 12px; text-underline-offset: 3px; margin-top: auto; }
+#consultant { min-width: 0; min-height: 0; }
+button:focus-visible, a:focus-visible { outline: 2px solid #8d421f; outline-offset: 3px; }
+body.telegram { --consultant-accent: #236b91; background: #f0f5f8; }
+.telegram .brand { font: 600 20px var(--consultant-font); letter-spacing: 0; }
+.telegram .demo-header { border-color: #cddde6; }
+.telegram .brand-sub { display: none; }
+.telegram .eyebrow { color: #236b91; }
+.telegram .bakery-cards, .telegram .bakery-link { display: none; }
+.telegram .context-actions button { background: #e0edf5; border-color: #bdd3e1; color: #174b69; }
+@media (max-height: 600px) { .demo-layout { padding: 12px 20px; gap: 20px; } .demo-header { padding: 8px 20px; } .bakery-cards { min-height: 90px; } h1 { font-size: 26px; } .context { gap: 10px; } .context-note { font-size: 11px; } }
+@media (max-height: 460px) { .bakery-cards, .context-note, .bakery-link { display: none; } .demo-header { padding: 5px 16px; } .brand { font-size: 22px; } .demo-layout { padding: 8px 12px; gap: 12px; } .context-copy p { font-size: 12px; } h1 { font-size: 22px; } }
+@media (max-width: 620px) { .demo-header { padding: 8px 12px; } .brand { font-size: 23px; } .demo-label { font-size: 10px; max-width: 125px; text-align: right; } .brand-sub { display: none; } .demo-layout { display: flex; flex-direction: column; gap: 8px; padding: 8px; } .context { flex: 0 0 auto; overflow: visible; } .context-copy, .bakery-cards, .context-note, .bakery-link { display: none; } .context-actions button { padding: 7px 10px; font-size: 11px; } #consultant { flex: 1; } }
+@media (max-height: 420px) { .demo-header { display: none; } .demo-layout { padding: 4px 8px; } }
+@media (max-height: 420px) and (max-width: 620px) { .context { display: none; } .demo-layout { gap: 0; } }

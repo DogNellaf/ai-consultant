@@ -1,6 +1,6 @@
 [project]
 name = "ai-consultant"
-version = "0.4.0"
+version = "0.5.0"
 description = "AI consultant over a company knowledge base: a site widget and a Telegram bot on one engine"
 requires-python = ">=3.11"
 

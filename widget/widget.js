@@ -33,14 +33,21 @@
   function apiEngine(saved) {
     var sessionId = saved || null;
     async function post(path, body, isForm) {
+      var controller = new AbortController();
+      var timeout = setTimeout(function () { controller.abort(); }, 90000);
+      try {
+      if (!isForm && ds.channel === "telegram") body.channel = "telegram";
       var r = await fetch(base + path.replace(/^\//, ""), {
         method: "POST",
+        signal: controller.signal,
         headers: isForm ? undefined : { "Content-Type": "application/json" },
         body: isForm ? body : JSON.stringify(body),
       });
       var data = await r.json();
+      if (!r.ok && data.kind !== "error") throw new Error("HTTP " + r.status);
       sessionId = data.session_id || sessionId;
       return data;
+      } finally { clearTimeout(timeout); }
     }
     return {
       ready: Promise.resolve(),
@@ -53,6 +60,10 @@
         return post("api/upload", f, true);
       },
       dropUpload: function () { return post("api/upload/delete", { session_id: sessionId }); },
+      forget: async function () {
+        if (sessionId) await post("api/session/delete", { session_id: sessionId });
+        sessionId = null;
+      },
       session: function () { return sessionId; },
       accept: ".txt,.md,.pdf",
     };
@@ -88,7 +99,7 @@
 
   /* The conversation survives moving between pages of the site: the server keeps the session,
    * the tab keeps what was shown (sessionStorage, gone with the tab). */
-  var STORE_KEY = "ai-consultant:" + base;
+  var STORE_KEY = "ai-consultant:" + base + ":" + (ds.channel || "widget");
   function loadState() {
     try { return JSON.parse(sessionStorage.getItem(STORE_KEY)) || null; } catch (e) { return null; }
   }
@@ -102,6 +113,7 @@
   function mount() {
     var target = ds.target ? document.querySelector(ds.target) : null;
     var host = el("div", "aic-host");
+    if (target) { host.style.display = "block"; host.style.height = "100%"; host.style.minHeight = "0"; }
     (target || document.body).appendChild(host);
     var root = host.attachShadow ? host.attachShadow({ mode: "open" }) : host;
     var css = el("link");
@@ -121,7 +133,7 @@
     var avatar = el("div", "aic-avatar");
     avatar.append(icon("bot"));
     var title = el("div", "aic-title", ds.title || "Консультант");
-    var status = el("div", "aic-status", "онлайн, отвечает сразу");
+    var status = el("div", "aic-status", ds.channel === "telegram" ? "Браузерный предпросмотр бота" : "Ответы по базе компании");
     var titles = el("div", "aic-titles");
     titles.append(title, status);
     var how = iconButton("search", "aic-icon-btn aic-how", "Как ищется ответ");
@@ -195,7 +207,14 @@
       if (r.manager_preview) b.append(el("pre", "aic-preview", r.manager_preview));
       if (r.search && r.search.length) {
         var t = el("div", "aic-search");
-        t.append(el("div", "aic-search-head", "Как искался ответ: " + (r.kind === "unknown" ? "ни один фрагмент не прошёл порог" : "лучший фрагмент прошёл порог")));
+        var reasons = {
+          model_refusal: "Модель просмотрела найденные фрагменты и не нашла в них ответа.",
+          weak_match: "Недостаточно надёжное совпадение с базой для ответа.",
+          provider_unavailable: "Модель недоступна. Использован поиск по базе без модели.",
+          model_answer: "Модель составила ответ по найденным фрагментам.",
+          retrieved: "Показан подходящий фрагмент базы без генерации."
+        };
+        t.append(el("div", "aic-search-head", reasons[r.decision] || "Найденные фрагменты базы знаний"));
         r.search.forEach(function (h, i) {
           var row = el("div", "aic-hit");
           row.append(el("span", "aic-hit-n", String(i + 1)), el("span", "aic-hit-t", h.title),
@@ -206,8 +225,11 @@
       }
       chips.textContent = "";
       (r.buttons || []).forEach(function (label) {
-        var c = el("button", "aic-chip", label);
+        var shortLabels = { "Сколько стоит доставка?": "Доставка", "За сколько дней заказать торт?": "Заказ торта", "Есть что-нибудь без глютена?": "Без глютена", "Позвать менеджера": "Менеджер" };
+        var c = el("button", "aic-chip", shortLabels[label] || label);
         c.type = "button";
+        c.setAttribute("aria-label", label);
+        c.title = label;
         c.addEventListener("click", function () { submit(label); });
         chips.append(c);
       });
@@ -243,7 +265,12 @@
       } catch (e) {
         if (window.console) console.error("ai-consultant:", e);
         wait.remove();
-        render({ kind: "error", text: "Не получилось ответить, попробуйте ещё раз." });
+        var error = { kind: "error", text: "Не удалось получить ответ. Проверьте связь и повторите запрос." };
+        render(error);
+        var retry = el("button", "aic-chip", "Повторить запрос");
+        retry.type = "button";
+        retry.addEventListener("click", function () { retry.remove(); run(fn); });
+        log.lastElementChild.append(retry);
       } finally {
         send.disabled = false;
         persist();
@@ -318,7 +345,11 @@
       open();
       queue.then(function () { submit(text); });
     }
-    return { open: open, ask: ask, forget: forget };
+    return { open: open, ask: ask, forget: async function () {
+      await queue;
+      if (engine) await engine.forget();
+      forget();
+    } };
   }
 
   function boot() { window.AiConsultant = mount(); }

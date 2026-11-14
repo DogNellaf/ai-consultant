@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Колосок — консультант по базе знаний</title>
+  <link rel="stylesheet" href="demo.css">
+  <script src="demo.js" defer></script>
+</head>
+<body>
+  <header class="demo-header"><a class="brand" href="demo.html" aria-label="Колосок — главная"><svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M2 12h20M5 5l14 14M5 19 19 5"/></svg> колосок<span class="brand-sub">ПЕКАРНЯ У ДОМА</span></a><span class="demo-label">Вымышленная пекарня · живой сервис</span></header>
+  <main class="demo-layout">
+    <section class="context" aria-labelledby="context-title">
+      <div class="context-copy"><span class="eyebrow">ПОМОЖЕМ ВЫБРАТЬ</span><h1 id="context-title">Хороший день начинается с тёплого хлеба</h1><p id="context-description">Уточните доставку, состав выпечки или сроки заказа торта. Консультант найдёт ответ в нашем прайсе и покажет источник.</p></div>
+      <div class="bakery-cards"><div class="bread-photo" role="img" aria-label="Свежий хлеб из пекарни"></div><div class="product"><span>Каждый день из печи</span><b>Хлеб на закваске</b><span>Батон 400 г · 140 ₽</span></div></div>
+      <div class="context-actions"><button type="button" data-question="Сколько стоит доставка?">Условия доставки <span aria-hidden="true">↗</span></button><button type="button" data-question="За сколько дней заказать торт?">Торт к празднику <span aria-hidden="true">↗</span></button></div>
+      <p class="context-note" id="channel-note">Ответы по 19 разделам базы. Свой TXT, Markdown или PDF можно прикрепить в чате. Заявка менеджеру показывается без отправки.</p>
+      <a class="bakery-link" href="index.html">Открыть сайт пекарни с плавающим виджетом ↗</a>
+    </section>
+    <section id="consultant" aria-label="Диалог с консультантом"></section>
+  </main>
+</body>
+</html>
