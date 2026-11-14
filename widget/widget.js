@@ -45,13 +45,15 @@
       });
       var data = await r.json();
       if (!r.ok && data.kind !== "error") throw new Error("HTTP " + r.status);
-      sessionId = data.session_id || sessionId;
+      sessionId = data.kind === "session_expired" ? null : (data.session_id || sessionId);
       return data;
       } finally { clearTimeout(timeout); }
     }
     return {
       ready: Promise.resolve(),
       greet: function () { return post("api/chat", { session_id: sessionId, text: "" }); },
+      resume: function () { return post("api/session", { session_id: sessionId }); },
+      restart: function () { sessionId = null; return this.greet(); },
       ask: function (text) { return post("api/chat", { session_id: sessionId, text: text }); },
       upload: function (file) {
         var f = new FormData();
@@ -168,7 +170,7 @@
     if (!target) wrap.append(fab);
     root.appendChild(wrap);
 
-    var engine, started = false;
+    var engine, started = false, needsRestart = false, generation = 0;
     var state = { session: null, open: false, items: [] };
 
     function persist() {
@@ -193,6 +195,16 @@
     }
 
     function render(r) {
+      if (r.kind === "session") { renderControls(r); return; }
+      if (r.kind === "session_expired") {
+        generation += 1;
+        needsRestart = true;
+        state.items = [];
+        state.session = null;
+        log.textContent = "";
+        input.value = "";
+        input.disabled = attach.disabled = true;
+      }
       state.items.push({ bot: r });
       var b = bubble("bot", r.text);
       b.classList.add("aic-" + r.kind);
@@ -230,9 +242,17 @@
         c.type = "button";
         c.setAttribute("aria-label", label);
         c.title = label;
-        c.addEventListener("click", function () { submit(label); });
+        c.addEventListener("click", function () {
+          if (label === "Начать новый диалог" && needsRestart) restart();
+          else submit(label);
+        });
         chips.append(c);
       });
+      renderControls(r);
+      scroll();
+    }
+
+    function renderControls(r) {
       if (typeof r.remaining === "number") remaining.textContent = "Осталось вопросов на сегодня: " + r.remaining;
       if ("upload" in r) {
         fileBar.hidden = !r.upload;
@@ -243,17 +263,17 @@
           fileBar.append(icon("file"), el("span", null, r.upload), x);
         }
       }
-      scroll();
     }
 
     // Calls go one after another: a question asked while the greeting loads waits for it
     var queue = Promise.resolve();
     function run(fn) {
-      queue = queue.then(function () { return step(fn); });
+      var version = generation;
+      queue = queue.then(function () { if (version === generation) return step(fn, version); });
       return queue;
     }
 
-    async function step(fn) {
+    async function step(fn, version) {
       send.disabled = true;
       var wait = bubble("bot aic-typing");
       wait.setAttribute("aria-label", "Консультант печатает");
@@ -269,15 +289,20 @@
         render(error);
         var retry = el("button", "aic-chip", "Повторить запрос");
         retry.type = "button";
-        retry.addEventListener("click", function () { retry.remove(); run(fn); });
+        retry.addEventListener("click", function () {
+          retry.remove();
+          if (version === generation) run(fn);
+        });
         log.lastElementChild.append(retry);
+        scroll();
       } finally {
-        send.disabled = false;
+        send.disabled = needsRestart;
         persist();
       }
     }
 
     function submit(text) {
+      if (needsRestart) return;
       text = (text || "").trim();
       if (!text) return;
       userBubble(text);
@@ -297,6 +322,17 @@
       run(function () { return engine.greet(); });
     }
 
+    function restart() {
+      generation += 1;
+      needsRestart = false;
+      input.disabled = attach.disabled = false;
+      log.textContent = "";
+      chips.textContent = "";
+      state.items = [];
+      state.session = null;
+      run(function () { return engine.restart(); });
+    }
+
     function restore(saved) {
       state = { session: saved.session, open: !!saved.open, items: [] };
       started = true;
@@ -306,6 +342,8 @@
         if (it.user != null) userBubble(it.user);
         else render(it.bot);
       });
+      if (state.session) run(function () { return engine.resume(); });
+      send.disabled = needsRestart;
       setTimeout(function () { log.classList.remove("aic-restored"); }, 0);
     }
 

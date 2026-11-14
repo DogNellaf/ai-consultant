@@ -47,8 +47,15 @@ def render(reply: Reply, show_search: bool) -> str:
     return "\n\n".join(parts)
 
 
-def _session(message: Message):
-    return SERVICE.session(f"tg{message.chat.id}", "telegram")
+async def _session(message: Message):
+    s = SERVICE.resolve(f"tg{message.chat.id}", "telegram")
+    if s is None:
+        await message.answer(
+            "Начните новый диалог командой /start. Если предыдущая сессия завершилась, "
+            "незавершённую заявку нужно заполнить заново. Это сообщение не обработано.",
+            reply_markup=keyboard(["/start"]),
+        )
+    return s
 
 
 async def send(message: Message, reply: Reply) -> None:
@@ -59,6 +66,8 @@ async def send(message: Message, reply: Reply) -> None:
 
 @dp.message(CommandStart())
 async def start(message: Message):
+    await SERVICE.delete(f"tg{message.chat.id}")
+    SERVICE.session(f"tg{message.chat.id}", "telegram")
     await send(message, SERVICE.consultant.greeting())
 
 
@@ -74,24 +83,31 @@ async def toggle_search(message: Message):
 
 @dp.message(Command("cancel"))
 async def cancel(message: Message):
-    reply = await SERVICE.ask(_session(message), visitor_key(f"tg:{message.from_user.id}"), CANCEL)
-    await send(message, reply)
+    s = await _session(message)
+    if s is not None:
+        reply = await SERVICE.ask(s, visitor_key(f"tg:{message.from_user.id}"), CANCEL)
+        await send(message, reply)
 
 
 @dp.message(F.document)
 async def document(message: Message, bot: Bot):
+    s = await _session(message)
+    if s is None:
+        return
     doc = message.document
     if doc.file_size and doc.file_size > config.UPLOAD_MAX_BYTES:
         await message.answer(f"Файл больше {config.UPLOAD_MAX_BYTES // 1000} КБ, пришлите поменьше.")
         return
     buf = await bot.download(doc)
-    await send(message, await SERVICE.upload(_session(message), doc.file_name or "file.txt", buf.read()))
+    await send(message, await SERVICE.upload(s, doc.file_name or "file.txt", buf.read()))
 
 
 @dp.message(F.text)
 async def text(message: Message):
-    reply = await SERVICE.ask(_session(message), visitor_key(f"tg:{message.from_user.id}"), message.text)
-    await send(message, reply)
+    s = await _session(message)
+    if s is not None:
+        reply = await SERVICE.ask(s, visitor_key(f"tg:{message.from_user.id}"), message.text)
+        await send(message, reply)
 
 
 async def main() -> None:

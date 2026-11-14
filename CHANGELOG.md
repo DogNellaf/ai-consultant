@@ -3,6 +3,16 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-11-15
+
+### Fixed
+
+- Reject expired HTTP session tokens before processing text or files; restored widgets verify the session and require an explicit restart, discarding stale form data.
+- Serialize session operations and wait for indexing workers before acknowledging deletion, including cancelled uploads and repeated deletes.
+- Return the original result for a repeated lead confirmation instead of saving and notifying twice; keep the cached result out of model history.
+- Require `/start` for Telegram conversations after session loss; `/start` clears the previous form and upload.
+- Add lifecycle regressions covering expired contacts, parallel HTTP confirmations, deletion during indexing and request cancellation.
+
 ## [0.5.0] - 2026-11-14
 
 ### Fixed

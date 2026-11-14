@@ -8,6 +8,7 @@ the question to a manager, who then gets a lead with the whole dialog.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
@@ -72,6 +73,10 @@ class Session:
     lead: LeadForm | None = None
     upload: str = ""  # file name, its fragments live in the "upload:<id>" collection
     last_question: str = ""
+    operation: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
+    expired: bool = False
+    completed_lead_text: str = ""
+    completed_lead: Reply | None = None
 
     @property
     def collections(self) -> list[str]:
@@ -129,10 +134,17 @@ class Consultant:
     def handle(self, s: Session, text: str, use_model: bool = True) -> Reply:
         text = text.strip()
         if s.lead:
-            return self._lead_step(s, text)
+            reply = self._lead_step(s, text)
+            if reply.kind == "lead_done":
+                s.completed_lead_text, s.completed_lead = text, reply
+            return reply
+        elif s.completed_lead is not None and text == s.completed_lead_text:
+            return s.completed_lead
         elif wants_manager(text):
+            s.completed_lead_text, s.completed_lead = "", None
             return self._lead_start(s, text)
         else:
+            s.completed_lead_text, s.completed_lead = "", None
             reply = self._answer(s, text, use_model)
         s.history.append({"role": "user", "content": text})
         s.history.append({"role": "assistant", "content": reply.text})

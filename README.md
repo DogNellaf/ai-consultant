@@ -106,6 +106,20 @@ docker build -t ai-consultant .
 docker run -d -p 8000:8000 -e DEMO_LEADS=1 -e QUOTA_SALT=$(openssl rand -hex 16) ai-consultant
 ```
 
+## Session recovery
+
+The widget verifies a restored conversation through `POST /api/session`. An expired or
+unknown session token returns `kind: session_expired` without processing its text or file.
+The widget clears the stale form and requires **Начать новый диалог** before creating a
+fresh session. Queued messages from the expired conversation are discarded. The Telegram
+bot requires `/start` to begin or restart a session after state loss.
+
+Operations within a session are serialized. Session deletion waits for active workers,
+so an indexing operation cannot recreate a deleted upload after the acknowledgement.
+Repeating the last form confirmation returns its original result until a different message
+or an explicitly new form starts; the cached result expires with the session and is never
+included in model history. This applies to one service process; HTTP uses one worker.
+
 ## Models
 
 `LLM_PROVIDER=none` (default), `gigachat` or `openai`. The provider is behind one `complete()` call

@@ -72,7 +72,7 @@ def test_upload_is_searched_with_the_base(service):
     assert r.kind == "upload" and "1 фрагмент." in r.text
     a = run(service.ask(s, "v1", "Когда бывает пирог с тыквой?"))
     assert a.kind == "answer" and a.sources[0]["source"] == "menu.txt"
-    service.drop_upload(s)
+    run(service.drop_upload(s))
     assert service.consultant.searcher.chunks([f"upload:{s.id}"]) == []
 
 
