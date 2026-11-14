@@ -83,11 +83,14 @@ def parse_markdown(text: str, source: str, collection: str = "kb") -> list[Chunk
 
 def parse_plain(text: str, source: str, collection: str) -> list[Chunk]:
     """An uploaded text without headings: fragments by paragraphs up to MAX_CHARS."""
-    text = _clean(text)
-    if text.lstrip().startswith("#") or "\n## " in text:
+    text = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    if re.search(r"^#{1,2} ", text, re.MULTILINE):
         return parse_markdown(text, source, collection)
+    text = _clean(text)
     doc_title = source.rsplit(".", 1)[0]
-    return [Chunk(source=source, title=doc_title, text=p, collection=collection) for p in _split_long(text)]
+    return [
+        Chunk(source=source, title=doc_title, text=p, collection=collection) for p in _split_long(text) if p.strip()
+    ]
 
 
 def load_dir(path: str | Path) -> list[Chunk]:

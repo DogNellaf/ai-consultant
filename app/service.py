@@ -14,6 +14,7 @@ import asyncio
 import hashlib
 import time
 import uuid
+from datetime import date
 
 from . import config
 from .engine import EXAMPLES, MANAGER, Consultant, Reply, Session, wants_manager
@@ -54,11 +55,24 @@ class Service:
 
     def _expire(self) -> None:
         now = time.time()
-        for sid, (s, seen) in list(self.sessions.items()):
+        for sid, (_s, seen) in list(self.sessions.items()):
             if now - seen > config.SESSION_TTL:
-                if s.upload:
-                    self.consultant.searcher.drop(f"upload:{sid}")
-                del self.sessions[sid]
+                self.forget(sid)
+
+    def forget(self, session_id: str | None) -> None:
+        entry = self.sessions.pop(session_id, None)
+        if entry:
+            s = entry[0]
+            self.consultant.searcher.drop(f"upload:{s.id}")
+            s.history.clear()
+            s.lead = None
+            s.upload = ""
+            s.last_question = ""
+
+    async def cleanup(self) -> None:
+        while True:
+            await asyncio.sleep(max(1, min(config.SESSION_TTL, 60)))
+            self._expire()
 
     # questions ---------------------------------------------------------------------------------
 
@@ -72,28 +86,37 @@ class Service:
         # the lead form, and the request that starts it, stay open after the limit: the limit
         # message itself offers the manager
         question = s.lead is None and not wants_manager(text)
-        if question and self.remaining(visitor) <= 0:
+        day = date.today()
+        reserved = question and self.store.reserve_message(visitor, config.MESSAGES_PER_DAY, day)
+        if question and not reserved:
             return Reply(
                 "limit",
                 f"На сегодня лимит демо исчерпан: {config.MESSAGES_PER_DAY} вопросов в сутки. "
                 "Возвращайтесь завтра или оставьте заявку менеджеру.",
                 buttons=[MANAGER],
             )
-        use_model = self.consultant.llm is not None and self.store.tokens_today() < config.DAILY_TOKEN_BUDGET
-        if question and use_model:
-            if self._waiting >= config.QUEUE_MAX:
-                return Reply("busy", "Сейчас много вопросов, повторите через минуту.", buttons=EXAMPLES)
-            self._waiting += 1
-            try:
-                async with self._sem:
-                    reply = await asyncio.to_thread(self.consultant.handle, s, text, True)
-            finally:
-                self._waiting -= 1
-        else:
-            reply = await asyncio.to_thread(self.consultant.handle, s, text, False)
-        if reply.counted or reply.tokens:
-            self.store.add_usage(visitor, 1 if reply.counted else 0, reply.tokens)
-        return reply
+        try:
+            if question and self.consultant.llm is not None:
+                if self._waiting >= config.QUEUE_MAX:
+                    return Reply("busy", "Сейчас много вопросов, повторите через минуту.", buttons=EXAMPLES)
+                self._waiting += 1
+                try:
+                    async with self._sem:
+                        use_model = self.store.tokens_today() < config.DAILY_TOKEN_BUDGET
+                        reply = await asyncio.to_thread(self.consultant.handle, s, text, use_model)
+                        # Record tokens before releasing the model slot: the next waiter sees them.
+                        if reply.tokens:
+                            self.store.add_usage(visitor, 0, reply.tokens, day=day)
+                finally:
+                    self._waiting -= 1
+            else:
+                reply = await asyncio.to_thread(self.consultant.handle, s, text, False)
+            if reply.counted:
+                reserved = False  # the reservation is now the completed question
+            return reply
+        finally:
+            if reserved:
+                self.store.add_usage(visitor, -1, 0, day=day)
 
     # uploads -----------------------------------------------------------------------------------
 
@@ -103,6 +126,12 @@ class Service:
         except UploadError as e:
             return Reply("error", str(e))
         chunks = to_chunks(filename, text, s.id)
+        if not chunks:
+            return Reply(
+                "error",
+                "В файле нет текста для поиска. Добавьте текст под заголовками и повторите загрузку."
+                + (" Предыдущий файл сохранён." if s.upload else ""),
+            )
         n = await asyncio.to_thread(self.consultant.searcher.index, f"upload:{s.id}", chunks)
         s.upload = filename
         return Reply(

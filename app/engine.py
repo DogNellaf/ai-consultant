@@ -12,6 +12,8 @@ import logging
 import re
 from dataclasses import dataclass, field
 
+import httpx
+
 from . import config
 from .llm import LLM, SYSTEM, UNKNOWN, LLMError, fragments_block
 from .notify import lead_text
@@ -23,6 +25,7 @@ log = logging.getLogger(__name__)
 MANAGER = "Позвать менеджера"
 CANCEL = "Отмена"
 KEEP = "Оставить как есть"
+DEMO_CONTACTS = "Заполнить демоданными"
 EXAMPLES = ["Сколько стоит доставка?", "За сколько дней заказать торт?", "Есть что-нибудь без глютена?"]
 
 HANDOFF = re.compile(
@@ -45,6 +48,7 @@ class Reply:
     counted: bool = False  # took one of the visitor's daily messages
     lead_id: int | None = None
     manager_preview: str = ""  # DEMO_LEADS: what the manager would get in Telegram
+    decision: str = ""  # retrieved | model_answer | model_refusal | weak_match | provider_unavailable
 
     def as_dict(self) -> dict:
         d = self.__dict__.copy()
@@ -115,8 +119,8 @@ class Consultant:
     def greeting(self) -> Reply:
         return Reply(
             "greeting",
-            f"Здравствуйте! {config.COMPANY} на связи, я ИИ-консультант: отвечаю по прайсу, доставке и частым "
-            "вопросам, а под ответом показываю, откуда взял. Можно прислать свой текст или PDF и спросить по нему.",
+            "Здравствуйте! Подскажу цены, доставку и сроки заказа торта. Источник можно раскрыть под ответом. "
+            "Прикрепите свой текст или PDF, чтобы спросить по нему.",
             buttons=EXAMPLES + [MANAGER],
         )
 
@@ -125,9 +129,9 @@ class Consultant:
     def handle(self, s: Session, text: str, use_model: bool = True) -> Reply:
         text = text.strip()
         if s.lead:
-            reply = self._lead_step(s, text)
+            return self._lead_step(s, text)
         elif wants_manager(text):
-            reply = self._lead_start(s, text)
+            return self._lead_start(s, text)
         else:
             reply = self._answer(s, text, use_model)
         s.history.append({"role": "user", "content": text})
@@ -141,12 +145,14 @@ class Consultant:
         best = hits[0] if hits else None
         model = self.llm if use_model else None
 
+        failed = False
         if model and confident(best, with_model=True):
             top = hits[: config.TOP_K_LLM]
             try:
                 return self._model_answer(s, question, top, model, [h.as_dict() for h in top])
-            except LLMError as e:
+            except (LLMError, httpx.HTTPError) as e:
                 log.warning("model failed, answering from fragments: %s", e)
+                failed = True
         hits = hits[: config.TOP_K]
         search = [h.as_dict() for h in hits]
         if confident(best, with_model=False):
@@ -158,8 +164,12 @@ class Consultant:
                 search=search,
                 mode="fragments",
                 counted=True,
+                decision="provider_unavailable" if failed else "retrieved",
             )
-        return self._unknown(search, counted=True)
+        reply = self._unknown(search, counted=True)
+        if failed:
+            reply.decision = "provider_unavailable"
+        return reply
 
     def _model_answer(self, s: Session, question: str, hits: list[Hit], model: LLM, search: list[dict]) -> Reply:
         system = SYSTEM.format(company=config.COMPANY, fragments=fragments_block(hits))
@@ -168,9 +178,17 @@ class Consultant:
         text, cited = cited_fragments(done.text, len(hits))
         if UNKNOWN in text or not text:
             reply = self._unknown(search, counted=True)
+            reply.decision = "model_refusal"
         else:
             shown = [hits[i] for i in cited] or shown_sources(hits)
-            reply = Reply("answer", text, sources=[h.as_dict() for h in shown], search=search, counted=True)
+            reply = Reply(
+                "answer",
+                text,
+                sources=[h.as_dict() for h in shown],
+                search=search,
+                counted=True,
+                decision="model_answer",
+            )
         reply.mode, reply.tokens = model.name, done.tokens
         return reply
 
@@ -183,6 +201,7 @@ class Consultant:
             buttons=[MANAGER],
             mode="fragments",
             counted=counted,
+            decision="weak_match",
         )
 
     # lead form ---------------------------------------------------------------------------------
@@ -192,12 +211,24 @@ class Consultant:
         s.lead = LeadForm(question=question)
         return Reply(
             "lead",
-            "Передам вопрос менеджеру вместе с нашей перепиской. Как к вам обращаться?",
-            buttons=[CANCEL],
+            (
+                "Это предпросмотр заявки без отправки. Используйте демоданные, не вводите настоящие контакты. Как к вам обращаться?"
+                if config.DEMO_LEADS
+                else "Передам вопрос менеджеру вместе с нашей перепиской. Как к вам обращаться?"
+            ),
+            buttons=([DEMO_CONTACTS, CANCEL] if config.DEMO_LEADS else [CANCEL]),
         )
 
     def _lead_step(self, s: Session, text: str) -> Reply:
         form = s.lead
+        if config.DEMO_LEADS and text == DEMO_CONTACTS and form.step == "name":
+            form.name, form.phone, form.step = "Тестовый гость", "+70000000000", "summary"
+            form.question = form.question or "Уточнить заказ торта"
+            return Reply(
+                "lead",
+                f"Подставлены вымышленные контакты. Что передать менеджеру? Можно оставить вопрос «{form.question}».",
+                buttons=[KEEP, CANCEL],
+            )
         if text == CANCEL or text.lower() in ("отмена", "/cancel"):
             s.lead = None
             return Reply("answer", "Хорошо, не передаю. Спрашивайте дальше.", buttons=EXAMPLES)

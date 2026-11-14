@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+from contextlib import suppress
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -103,7 +104,13 @@ async def main() -> None:
     SERVICE = build()
     session = AiohttpSession(proxy=config.TELEGRAM_PROXY) if config.TELEGRAM_PROXY else None
     bot = Bot(config.TELEGRAM_BOT_TOKEN, session=session)
-    await dp.start_polling(bot)
+    cleanup = asyncio.create_task(SERVICE.cleanup())
+    try:
+        await dp.start_polling(bot)
+    finally:
+        cleanup.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup
 
 
 if __name__ == "__main__":

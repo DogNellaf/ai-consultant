@@ -45,11 +45,23 @@ class MemoryStore:
                 del self._usage[k]
 
     def messages_today(self, visitor: str) -> int:
-        return self._usage.get((date.today().isoformat(), visitor), [0, 0])[0]
+        with self._lock:
+            return self._usage.get((date.today().isoformat(), visitor), [0, 0])[0]
+
+    def reserve_message(self, visitor: str, limit: int, day: date) -> bool:
+        with self._lock:
+            for key in [key for key in self._usage if key[0] < day.isoformat()]:
+                del self._usage[key]
+            row = self._usage.setdefault((day.isoformat(), visitor), [0, 0])
+            if row[0] >= limit:
+                return False
+            row[0] += 1
+            return True
 
     def tokens_today(self) -> int:
         today = date.today().isoformat()
-        return sum(v[1] for (d, _), v in self._usage.items() if d == today)
+        with self._lock:
+            return sum(v[1] for (d, _), v in self._usage.items() if d == today)
 
 
 SCHEMA = """
@@ -103,6 +115,19 @@ class PgStore:
     def messages_today(self, visitor: str) -> int:
         row = self._q("SELECT messages FROM usage WHERE day = %s AND visitor = %s", (date.today(), visitor)).fetchone()
         return row[0] if row else 0
+
+    def reserve_message(self, visitor: str, limit: int, day: date) -> bool:
+        if limit <= 0:
+            return False
+        return (
+            self._q(
+                "INSERT INTO usage (day, visitor, messages, tokens) VALUES (%s,%s,1,0)"
+                " ON CONFLICT (day, visitor) DO UPDATE SET messages = usage.messages + 1"
+                " WHERE usage.messages < %s RETURNING messages",
+                (day, visitor, limit),
+            ).fetchone()
+            is not None
+        )
 
     def tokens_today(self) -> int:
         return self._q("SELECT coalesce(sum(tokens), 0) FROM usage WHERE day = %s", (date.today(),)).fetchone()[0]

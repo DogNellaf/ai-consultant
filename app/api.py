@@ -5,9 +5,11 @@ uvicorn app.api:app --host 0.0.0.0 --port 8000
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,7 +30,13 @@ async def lifespan(app: FastAPI):
         from .setup import build
 
         app.state.service = build()
-    yield
+    cleanup = asyncio.create_task(app.state.service.cleanup())
+    try:
+        yield
+    finally:
+        cleanup.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup
 
 
 app = FastAPI(title="ai-consultant", lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -40,6 +48,7 @@ app.add_middleware(
 class Ask(BaseModel):
     session_id: str | None = Field(default=None, max_length=64)
     text: str = Field(default="", max_length=1000)
+    channel: Literal["widget", "telegram"] = "widget"
 
 
 def _service(request: Request) -> Service:
@@ -63,7 +72,8 @@ def health():
 @app.post("/api/chat")
 async def chat(body: Ask, request: Request):
     service = _service(request)
-    s = service.session(body.session_id, "widget")
+    channel = body.channel if config.DEMO_LEADS else "widget"
+    s = service.session(body.session_id, channel)
     visitor = _visitor(request)
     reply = await service.ask(s, visitor, body.text)
     return _out(service, s, visitor, reply)
@@ -84,6 +94,12 @@ async def upload_delete(body: Ask, request: Request):
     service = _service(request)
     s = service.session(body.session_id, "widget")
     return _out(service, s, _visitor(request), service.drop_upload(s))
+
+
+@app.post("/api/session/delete")
+async def session_delete(body: Ask, request: Request):
+    _service(request).forget(body.session_id)
+    return {"ok": True}
 
 
 # The widget files with the demo pages.

@@ -48,3 +48,15 @@ def consultant(searcher, store, sent):
 @pytest.fixture
 def service(consultant):
     return Service(consultant)
+
+
+@pytest.fixture
+def client(service):
+    from fastapi.testclient import TestClient
+
+    from app.api import app
+
+    app.state.service = service
+    with TestClient(app) as c:
+        yield c
+    del app.state.service

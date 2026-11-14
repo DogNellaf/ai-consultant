@@ -1,17 +1,3 @@
-import pytest
-from fastapi.testclient import TestClient
-
-from app.api import app
-
-
-@pytest.fixture
-def client(service):
-    app.state.service = service
-    with TestClient(app) as c:
-        yield c
-    del app.state.service
-
-
 def test_chat_keeps_session_and_counts(client):
     r = client.post("/api/chat", json={"text": "Можно забрать заказ самому?"}).json()
     assert r["kind"] == "answer" and r["sources"][0]["source"] == "delivery.md"

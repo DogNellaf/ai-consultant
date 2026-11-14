@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass
+from functools import wraps
 from typing import Protocol
 
 import httpx
@@ -43,6 +44,27 @@ class LLMError(RuntimeError):
     pass
 
 
+def provider_errors(method):
+    """Keep transport failures and malformed provider payloads behind the same boundary."""
+
+    @wraps(method)
+    def complete(*args, **kwargs):
+        try:
+            return method(*args, **kwargs)
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError, AttributeError) as e:
+            raise LLMError(f"Provider unavailable ({type(e).__name__})") from e
+
+    return complete
+
+
+def completion(data: dict) -> Completion:
+    text = data["choices"][0]["message"]["content"]
+    tokens = data.get("usage", {}).get("total_tokens", 0)
+    if not isinstance(text, str) or not isinstance(tokens, int) or tokens < 0:
+        raise LLMError("Invalid completion payload")
+    return Completion(text.strip(), tokens)
+
+
 class GigaChat:
     """GigaChat REST API: an OAuth token for 30 minutes, then OpenAI-like chat/completions."""
 
@@ -71,15 +93,14 @@ class GigaChat:
         self._token, self._expires = data["access_token"], data["expires_at"] / 1000
         return self._token
 
+    @provider_errors
     def complete(self, system: str, messages: list[dict]) -> Completion:
         body = {"model": self.model, "messages": [{"role": "system", "content": system}, *messages], "temperature": 0.1}
         r = self.http.post(self.CHAT, headers={"Authorization": f"Bearer {self._access_token()}"}, json=body)
         if r.status_code != 200:
             raise LLMError(f"GigaChat {r.status_code}: {r.text[:200]}")
         data = r.json()
-        return Completion(
-            data["choices"][0]["message"]["content"].strip(), data.get("usage", {}).get("total_tokens", 0)
-        )
+        return completion(data)
 
 
 class OpenAICompatible:
@@ -93,15 +114,14 @@ class OpenAICompatible:
             base_url=base_url.rstrip("/"), timeout=timeout, headers={"Authorization": f"Bearer {api_key}"}
         )
 
+    @provider_errors
     def complete(self, system: str, messages: list[dict]) -> Completion:
         body = {"model": self.model, "messages": [{"role": "system", "content": system}, *messages], "temperature": 0.1}
         r = self.http.post("/chat/completions", json=body)
         if r.status_code != 200:
             raise LLMError(f"{self.model} {r.status_code}: {r.text[:200]}")
         data = r.json()
-        return Completion(
-            data["choices"][0]["message"]["content"].strip(), data.get("usage", {}).get("total_tokens", 0)
-        )
+        return completion(data)
 
 
 def from_config() -> LLM | None:
