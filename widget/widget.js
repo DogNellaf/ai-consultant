@@ -32,6 +32,7 @@
 
   function apiEngine(saved) {
     var sessionId = saved || null;
+    var formToken = null;
     async function post(path, body, isForm) {
       var controller = new AbortController();
       var timeout = setTimeout(function () { controller.abort(); }, 90000);
@@ -46,6 +47,7 @@
       var data = await r.json();
       if (!r.ok && data.kind !== "error") throw new Error("HTTP " + r.status);
       sessionId = data.kind === "session_expired" ? null : (data.session_id || sessionId);
+      if ("form_token" in data) formToken = data.form_token;
       return data;
       } finally { clearTimeout(timeout); }
     }
@@ -54,7 +56,14 @@
       greet: function () { return post("api/chat", { session_id: sessionId, text: "" }); },
       resume: function () { return post("api/session", { session_id: sessionId }); },
       restart: function () { sessionId = null; return this.greet(); },
-      ask: function (text) { return post("api/chat", { session_id: sessionId, text: text }); },
+      question: function (text, pending) {
+        // Capture once: transport retries must never become the next form answer.
+        var body = pending || {
+          session_id: sessionId, text: text, form_token: formToken,
+          request_id: window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)
+        };
+        return { body: body, send: function () { return post("api/chat", body); } };
+      },
       upload: function (file) {
         var f = new FormData();
         f.append("file", file);
@@ -170,8 +179,8 @@
     if (!target) wrap.append(fab);
     root.appendChild(wrap);
 
-    var engine, started = false, needsRestart = false, generation = 0;
-    var state = { session: null, open: false, items: [] };
+    var engine, started = false, needsRestart = false, generation = 0, queued = 0;
+    var state = { session: null, open: false, items: [], pending: null };
 
     function persist() {
       state.session = engine && engine.session ? engine.session() : state.session;
@@ -201,6 +210,7 @@
         needsRestart = true;
         state.items = [];
         state.session = null;
+        state.pending = null;
         log.textContent = "";
         input.value = "";
         input.disabled = attach.disabled = true;
@@ -249,6 +259,7 @@
         chips.append(c);
       });
       renderControls(r);
+      updateBusy();
       scroll();
     }
 
@@ -267,9 +278,22 @@
 
     // Calls go one after another: a question asked while the greeting loads waits for it
     var queue = Promise.resolve();
+    function updateBusy() {
+      send.disabled = attach.disabled = needsRestart || queued > 0;
+      input.disabled = needsRestart;
+      input.readOnly = queued > 0;
+      chips.querySelectorAll("button").forEach(function (b) { b.disabled = queued > 0; });
+      fileBar.querySelectorAll("button").forEach(function (b) { b.disabled = needsRestart || queued > 0; });
+    }
     function run(fn) {
       var version = generation;
-      queue = queue.then(function () { if (version === generation) return step(fn, version); });
+      log.querySelectorAll(".aic-retry").forEach(function (b) { b.remove(); });
+      queued += 1;
+      updateBusy();
+      queue = queue.then(function () { if (version === generation) return step(fn, version); }).finally(function () {
+        queued -= 1;
+        updateBusy();
+      });
       return queue;
     }
 
@@ -287,27 +311,36 @@
         wait.remove();
         var error = { kind: "error", text: "Не удалось получить ответ. Проверьте связь и повторите запрос." };
         render(error);
-        var retry = el("button", "aic-chip", "Повторить запрос");
+        var retry = el("button", "aic-chip aic-retry", "Повторить запрос");
         retry.type = "button";
         retry.addEventListener("click", function () {
+          if (queued > 0) return;
           retry.remove();
           if (version === generation) run(fn);
         });
         log.lastElementChild.append(retry);
         scroll();
       } finally {
-        send.disabled = needsRestart;
         persist();
       }
     }
 
     function submit(text) {
-      if (needsRestart) return;
+      if (needsRestart || queued > 0) return;
       text = (text || "").trim();
       if (!text) return;
       userBubble(text);
       input.value = "";
-      run(function () { return engine.ask(text); });
+      var command = engine.question(text);
+      state.pending = command.body;
+      persist();
+      run(function () { return sendCommand(command); });
+    }
+
+    async function sendCommand(command) {
+      var result = await command.send();
+      state.pending = null;
+      return result;
     }
 
     function makeEngine() {
@@ -330,11 +363,12 @@
       chips.textContent = "";
       state.items = [];
       state.session = null;
+      state.pending = null;
       run(function () { return engine.restart(); });
     }
 
     function restore(saved) {
-      state = { session: saved.session, open: !!saved.open, items: [] };
+      state = { session: saved.session, open: !!saved.open, items: [], pending: saved.pending || null };
       started = true;
       makeEngine();
       log.classList.add("aic-restored");
@@ -343,7 +377,11 @@
         else render(it.bot);
       });
       if (state.session) run(function () { return engine.resume(); });
-      send.disabled = needsRestart;
+      if (state.pending && !needsRestart) {
+        var command = engine.question(state.pending.text, state.pending);
+        run(function () { return sendCommand(command); });
+      }
+      updateBusy();
       setTimeout(function () { log.classList.remove("aic-restored"); }, 0);
     }
 
@@ -368,7 +406,7 @@
     file.addEventListener("change", function () {
       var f = file.files[0];
       file.value = "";
-      if (!f) return;
+      if (!f || needsRestart || queued > 0) return;
       userBubble("📎 " + f.name);
       run(function () { return engine.upload(f); });
     });

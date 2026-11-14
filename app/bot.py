@@ -85,7 +85,7 @@ async def toggle_search(message: Message):
 async def cancel(message: Message):
     s = await _session(message)
     if s is not None:
-        reply = await SERVICE.ask(s, visitor_key(f"tg:{message.from_user.id}"), CANCEL)
+        reply = await SERVICE.ask(s, visitor_key(f"tg:{message.from_user.id}"), CANCEL, _request_id(message))
         await send(message, reply)
 
 
@@ -106,8 +106,13 @@ async def document(message: Message, bot: Bot):
 async def text(message: Message):
     s = await _session(message)
     if s is not None:
-        reply = await SERVICE.ask(s, visitor_key(f"tg:{message.from_user.id}"), message.text)
+        reply = await SERVICE.ask(s, visitor_key(f"tg:{message.from_user.id}"), message.text, _request_id(message))
         await send(message, reply)
+
+
+def _request_id(message: Message) -> str | None:
+    mid = getattr(message, "message_id", None)
+    return f"tg:{message.chat.id}:{mid}" if mid is not None else None
 
 
 async def main() -> None:

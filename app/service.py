@@ -97,6 +97,8 @@ class Service:
         s.upload = ""
         s.last_question = ""
         s.completed_lead_text, s.completed_lead = "", None
+        s.form_reply = None
+        s.requests.clear()
         if self._deleting.get(s.id) is s:
             del self._deleting[s.id]
 
@@ -119,16 +121,23 @@ class Service:
                     self.sessions[s.id] = (s, time.time())
 
     @staticmethod
-    async def _thread(fn, *args):
+    async def _thread(fn, *args, completed=None):
         # Cancelling the HTTP task must not release the session lock while its worker writes.
         worker = asyncio.create_task(asyncio.to_thread(fn, *args))
-        try:
-            return await asyncio.shield(worker)
-        except asyncio.CancelledError:
+        cancelled = False
+        while not worker.done():
             try:
-                await worker
-            finally:
-                raise
+                await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                cancelled = True
+        try:
+            result = worker.result()
+            if completed is not None:
+                completed(result)
+        finally:
+            if cancelled:
+                raise asyncio.CancelledError
+        return result
 
     async def cleanup(self) -> None:
         while True:
@@ -140,14 +149,44 @@ class Service:
     def remaining(self, visitor: str) -> int:
         return max(0, config.MESSAGES_PER_DAY - self.store.messages_today(visitor))
 
-    async def ask(self, s: Session, visitor: str, text: str) -> Reply:
+    async def ask(
+        self, s: Session, visitor: str, text: str, request_id: str | None = None, form_token: str | None = None
+    ) -> Reply:
         async with self._operation(s):
             if s.expired:
                 return expired_reply()
-            reply = await self._ask(s, visitor, text)
+            text = (text or "").strip()[:1000]
+            fingerprint = hashlib.sha256(f"{text}\0{form_token}".encode()).hexdigest()
+            if request_id and request_id in s.requests:
+                original, reply = s.requests[request_id]
+                if original != fingerprint:
+                    return Reply("error", "Этот запрос уже обработан с другими данными. Отправьте новое сообщение.")
+                return reply
+            if form_token is not None and form_token != s.form_token:
+                return s.form_reply or Reply("error", "Этот шаг анкеты уже завершён. Отправьте новое сообщение.")
+            form_action = bool(text) and (s.lead is not None or wants_manager(text))
+            recorded = False
+
+            def record(reply):
+                nonlocal recorded
+                recorded = True
+                if s.expired:
+                    return
+                if form_action:
+                    s.form_token = uuid.uuid4().hex
+                    s.form_reply = reply
+                reply.form_token = s.form_token
+                if request_id and reply.kind not in ("busy", "error", "session_expired"):
+                    s.requests[request_id] = (fingerprint, reply)
+                    if len(s.requests) > 32:
+                        del s.requests[next(iter(s.requests))]
+
+            reply = await self._ask(s, visitor, text, record)
+            if not recorded:
+                record(reply)
             return expired_reply() if s.expired else reply
 
-    async def _ask(self, s: Session, visitor: str, text: str) -> Reply:
+    async def _ask(self, s: Session, visitor: str, text: str, completed) -> Reply:
         text = (text or "").strip()[:1000]
         if not text:
             return self.consultant.greeting()
@@ -166,6 +205,15 @@ class Service:
                 buttons=[MANAGER],
             )
         try:
+
+            def settle(reply):
+                nonlocal reserved
+                if reply.tokens:
+                    self.store.add_usage(visitor, 0, reply.tokens, day=day)
+                if reply.counted:
+                    reserved = False
+                completed(reply)
+
             if question and self.consultant.llm is not None:
                 if self._waiting >= config.QUEUE_MAX:
                     return Reply("busy", "Сейчас много вопросов, повторите через минуту.", buttons=EXAMPLES)
@@ -175,16 +223,12 @@ class Service:
                         if s.expired:
                             return expired_reply()
                         use_model = self.store.tokens_today() < config.DAILY_TOKEN_BUDGET
-                        reply = await self._thread(self.consultant.handle, s, text, use_model)
-                        # Record tokens before releasing the model slot: the next waiter sees them.
-                        if reply.tokens:
-                            self.store.add_usage(visitor, 0, reply.tokens, day=day)
+                        # Settle completed work before releasing the slot or propagating cancellation.
+                        reply = await self._thread(self.consultant.handle, s, text, use_model, completed=settle)
                 finally:
                     self._waiting -= 1
             else:
-                reply = await self._thread(self.consultant.handle, s, text, False)
-            if reply.counted:
-                reserved = False  # the reservation is now the completed question
+                reply = await self._thread(self.consultant.handle, s, text, False, completed=settle)
             return reply
         finally:
             if reserved:

@@ -50,6 +50,8 @@ class Ask(BaseModel):
     session_id: str | None = Field(default=None, max_length=64)
     text: str = Field(default="", max_length=1000)
     channel: Literal["widget", "telegram"] = "widget"
+    request_id: str | None = Field(default=None, min_length=1, max_length=64)
+    form_token: str | None = Field(default=None, max_length=64)
 
 
 def _service(request: Request) -> Service:
@@ -67,6 +69,7 @@ def _out(service: Service, s, visitor: str, reply) -> dict:
         "remaining": service.remaining(visitor),
         "upload": s.upload if s is not None and not s.expired else "",
         **reply.as_dict(),
+        "form_token": (reply.form_token or s.form_token) if s is not None and not s.expired else None,
     }
 
 
@@ -81,7 +84,9 @@ async def chat(body: Ask, request: Request):
     channel = body.channel if config.DEMO_LEADS else "widget"
     s = service.resolve(body.session_id, channel)
     visitor = _visitor(request)
-    reply = await service.ask(s, visitor, body.text) if s is not None else expired_reply()
+    reply = (
+        await service.ask(s, visitor, body.text, body.request_id, body.form_token) if s is not None else expired_reply()
+    )
     return _out(service, s, visitor, reply)
 
 

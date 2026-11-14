@@ -120,6 +120,8 @@ Repeating the last form confirmation returns its original result until a differe
 or an explicitly new form starts; the cached result expires with the session and is never
 included in model history. This applies to one service process; HTTP uses one worker.
 
+HTTP questions carry a request ID and form token. Retrying an operation replays its result without advancing the form or charging twice. The widget disables form actions while waiting and persists pending operations for recovery after reload. The last 32 request results are held in session memory and cleared on reset/expiry, outside model history. Telegram text updates use their message ID. Completed model work is accounted before task cancellation propagates; work cancelled while still queued is refunded.
+
 ## Models
 
 `LLM_PROVIDER=none` (default), `gigachat` or `openai`. The provider is behind one `complete()` call

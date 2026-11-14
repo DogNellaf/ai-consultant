@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import uuid
 from dataclasses import dataclass, field
 
 import httpx
@@ -50,6 +51,7 @@ class Reply:
     lead_id: int | None = None
     manager_preview: str = ""  # DEMO_LEADS: what the manager would get in Telegram
     decision: str = ""  # retrieved | model_answer | model_refusal | weak_match | provider_unavailable
+    form_token: str | None = None  # state expected by the next answer to this reply
 
     def as_dict(self) -> dict:
         d = self.__dict__.copy()
@@ -77,6 +79,9 @@ class Session:
     expired: bool = False
     completed_lead_text: str = ""
     completed_lead: Reply | None = None
+    form_token: str = field(default_factory=lambda: uuid.uuid4().hex)
+    form_reply: Reply | None = None
+    requests: dict[str, tuple[str, Reply]] = field(default_factory=dict, repr=False)
 
     @property
     def collections(self) -> list[str]:
