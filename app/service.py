@@ -19,6 +19,7 @@ from datetime import date
 
 from . import config
 from .engine import EXAMPLES, MANAGER, Consultant, Reply, Session, wants_manager
+from .pdf import extract_pdf
 from .uploads import UploadError, extract_text, to_chunks
 
 
@@ -52,6 +53,8 @@ class Service:
         self._deleting: dict[str, Session] = {}
         self._sem = asyncio.Semaphore(config.LLM_CONCURRENCY)
         self._waiting = 0
+        self._pdf_sem = asyncio.Semaphore(config.PDF_CONCURRENCY)
+        self._pdf_waiting = 0
 
     # sessions ----------------------------------------------------------------------------------
 
@@ -150,13 +153,19 @@ class Service:
         return max(0, config.MESSAGES_PER_DAY - self.store.messages_today(visitor))
 
     async def ask(
-        self, s: Session, visitor: str, text: str, request_id: str | None = None, form_token: str | None = None
+        self,
+        s: Session,
+        visitor: str,
+        text: str,
+        request_id: str | None = None,
+        form_token: str | None = None,
+        intent: str = "message",
     ) -> Reply:
         async with self._operation(s):
             if s.expired:
                 return expired_reply()
             text = (text or "").strip()[:1000]
-            fingerprint = hashlib.sha256(f"{text}\0{form_token}".encode()).hexdigest()
+            fingerprint = hashlib.sha256(f"{text}\0{form_token}\0{intent}".encode()).hexdigest()
             if request_id and request_id in s.requests:
                 original, reply = s.requests[request_id]
                 if original != fingerprint:
@@ -164,6 +173,8 @@ class Service:
                 return reply
             if form_token is not None and form_token != s.form_token:
                 return s.form_reply or Reply("error", "Этот шаг анкеты уже завершён. Отправьте новое сообщение.")
+            if intent == "question" and s.lead is not None:
+                return s.form_reply or Reply("lead", "Сначала завершите или отмените заявку.", buttons=["Отмена"])
             form_action = bool(text) and (s.lead is not None or wants_manager(text))
             recorded = False
 
@@ -245,10 +256,24 @@ class Service:
 
     async def _upload(self, s: Session, filename: str, data: bytes) -> Reply:
         try:
-            text = extract_text(filename, data)
+            if filename.lower().endswith(".pdf"):
+                if self._pdf_waiting >= config.PDF_CONCURRENCY + config.PDF_QUEUE_MAX:
+                    raise UploadError("Сейчас обрабатываются другие PDF. Повторите загрузку через минуту.")
+                self._pdf_waiting += 1
+                try:
+                    async with self._pdf_sem:
+                        if s.expired:
+                            return expired_reply()
+                        text = await extract_pdf(data)
+                finally:
+                    self._pdf_waiting -= 1
+            else:
+                text = await self._thread(extract_text, filename, data)
         except UploadError as e:
             return Reply("error", str(e))
-        chunks = to_chunks(filename, text, s.id)
+        if s.expired:
+            return expired_reply()
+        chunks = await self._thread(to_chunks, filename, text, s.id)
         if not chunks:
             return Reply(
                 "error",

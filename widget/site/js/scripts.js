@@ -16,3 +16,8 @@ window.addEventListener('DOMContentLoaded', () => {
         button.addEventListener('click', () => window.AiConsultant && window.AiConsultant.ask(button.dataset.ask));
     });
 });
+window.addEventListener('ai-consultant:state', (event) => {
+    document.querySelectorAll('[data-ask]').forEach((button) => {
+        button.disabled = event.detail.blocked;
+    });
+});

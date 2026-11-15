@@ -87,6 +87,15 @@ marked `needs_model` in the smoke file.
 | `DAILY_TOKEN_BUDGET` | 200 000 | the model is switched off for the rest of the day, answers come from the fragments |
 | `LLM_CONCURRENCY` | 1 | model calls wait in a queue; GigaChat gives individuals one stream |
 | `QUEUE_MAX` | 20 | more waiting and the visitor is asked to repeat in a minute |
+| `PDF_TIMEOUT` | 5 | wall-clock seconds per PDF parser; timeout preserves the previous document |
+| `PDF_MEMORY_MB` | 96 | parser address-space limit on Linux; CPU time is also bounded |
+| `PDF_CONCURRENCY` / `PDF_QUEUE_MAX` | 1 / 2 | simultaneous PDF parser processes and additional waiting uploads |
+
+PDF parsing runs in a disposable process outside the HTTP worker. Windows previews enforce the
+wall-clock deadline; Linux production additionally enforces memory and CPU limits.
+Page question buttons stay disabled during the lead form. After a transport error, choose retry
+or **Не повторять** before changing documents; dismissal refreshes the actual server form state
+without resending the question. Ordinary reload recovery still replays the original operation ID.
 
 ## Public demo
 

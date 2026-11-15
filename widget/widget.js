@@ -33,6 +33,7 @@
   function apiEngine(saved) {
     var sessionId = saved || null;
     var formToken = null;
+    var formActive = false;
     async function post(path, body, isForm) {
       var controller = new AbortController();
       var timeout = setTimeout(function () { controller.abort(); }, 90000);
@@ -48,6 +49,7 @@
       if (!r.ok && data.kind !== "error") throw new Error("HTTP " + r.status);
       sessionId = data.kind === "session_expired" ? null : (data.session_id || sessionId);
       if ("form_token" in data) formToken = data.form_token;
+      if ("form_active" in data) formActive = data.form_active;
       return data;
       } finally { clearTimeout(timeout); }
     }
@@ -56,10 +58,10 @@
       greet: function () { return post("api/chat", { session_id: sessionId, text: "" }); },
       resume: function () { return post("api/session", { session_id: sessionId }); },
       restart: function () { sessionId = null; return this.greet(); },
-      question: function (text, pending) {
+      question: function (text, pending, intent) {
         // Capture once: transport retries must never become the next form answer.
         var body = pending || {
-          session_id: sessionId, text: text, form_token: formToken,
+          session_id: sessionId, text: text, form_token: formToken, intent: intent || "message",
           request_id: window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)
         };
         return { body: body, send: function () { return post("api/chat", body); } };
@@ -76,6 +78,7 @@
         sessionId = null;
       },
       session: function () { return sessionId; },
+      inForm: function () { return formActive; },
       accept: ".txt,.md,.pdf",
     };
   }
@@ -204,7 +207,11 @@
     }
 
     function render(r) {
-      if (r.kind === "session") { renderControls(r); return; }
+      if (r.kind === "session") {
+        renderControls(r);
+        if (r.form_reply) render(r.form_reply);
+        return;
+      }
       if (r.kind === "session_expired") {
         generation += 1;
         needsRestart = true;
@@ -279,11 +286,15 @@
     // Calls go one after another: a question asked while the greeting loads waits for it
     var queue = Promise.resolve();
     function updateBusy() {
-      send.disabled = attach.disabled = needsRestart || queued > 0;
+      var blocked = needsRestart || queued > 0 || !!state.pending;
+      send.disabled = attach.disabled = blocked;
       input.disabled = needsRestart;
-      input.readOnly = queued > 0;
-      chips.querySelectorAll("button").forEach(function (b) { b.disabled = queued > 0; });
-      fileBar.querySelectorAll("button").forEach(function (b) { b.disabled = needsRestart || queued > 0; });
+      input.readOnly = queued > 0 || !!state.pending;
+      chips.querySelectorAll("button").forEach(function (b) { b.disabled = queued > 0 || !!state.pending; });
+      fileBar.querySelectorAll("button").forEach(function (b) { b.disabled = blocked; });
+      window.dispatchEvent(new CustomEvent("ai-consultant:state", {
+        detail: { blocked: blocked || !!(engine && engine.inForm()) }
+      }));
     }
     function run(fn) {
       var version = generation;
@@ -319,19 +330,37 @@
           if (version === generation) run(fn);
         });
         log.lastElementChild.append(retry);
+        if (state.pending) {
+          var discard = el("button", "aic-chip aic-retry", "Не повторять");
+          discard.type = "button";
+          discard.addEventListener("click", function () {
+            if (queued > 0) return;
+            state.pending = null;
+            persist();
+            run(async function () {
+              var result = await engine.resume();
+              if (result.kind === "session" && !result.form_reply) {
+                result.kind = "notice";
+                result.text = "Повтор отменён. Можно задать новый вопрос или изменить файл.";
+              }
+              return result;
+            });
+          });
+          log.lastElementChild.append(discard);
+        }
         scroll();
       } finally {
         persist();
       }
     }
 
-    function submit(text) {
-      if (needsRestart || queued > 0) return;
+    function submit(text, fromPage) {
+      if (needsRestart || queued > 0 || state.pending || (fromPage && engine.inForm())) return;
       text = (text || "").trim();
       if (!text) return;
       userBubble(text);
       input.value = "";
-      var command = engine.question(text);
+      var command = engine.question(text, null, fromPage ? "question" : "message");
       state.pending = command.body;
       persist();
       run(function () { return sendCommand(command); });
@@ -406,7 +435,7 @@
     file.addEventListener("change", function () {
       var f = file.files[0];
       file.value = "";
-      if (!f || needsRestart || queued > 0) return;
+      if (!f || needsRestart || queued > 0 || state.pending) return;
       userBubble("📎 " + f.name);
       run(function () { return engine.upload(f); });
     });
@@ -419,7 +448,7 @@
     // ask() from a button on the page: the question goes after the greeting if the chat was closed
     function ask(text) {
       open();
-      queue.then(function () { submit(text); });
+      queue.then(function () { submit(text, true); });
     }
     return { open: open, ask: ask, forget: async function () {
       await queue;

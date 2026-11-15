@@ -52,6 +52,7 @@ class Ask(BaseModel):
     channel: Literal["widget", "telegram"] = "widget"
     request_id: str | None = Field(default=None, min_length=1, max_length=64)
     form_token: str | None = Field(default=None, max_length=64)
+    intent: Literal["message", "question"] = "message"
 
 
 def _service(request: Request) -> Service:
@@ -68,6 +69,7 @@ def _out(service: Service, s, visitor: str, reply) -> dict:
         "session_id": s.id if s is not None and not s.expired else None,
         "remaining": service.remaining(visitor),
         "upload": s.upload if s is not None and not s.expired else "",
+        "form_active": bool(s is not None and not s.expired and s.lead is not None),
         **reply.as_dict(),
         "form_token": (reply.form_token or s.form_token) if s is not None and not s.expired else None,
     }
@@ -85,7 +87,9 @@ async def chat(body: Ask, request: Request):
     s = service.resolve(body.session_id, channel)
     visitor = _visitor(request)
     reply = (
-        await service.ask(s, visitor, body.text, body.request_id, body.form_token) if s is not None else expired_reply()
+        await service.ask(s, visitor, body.text, body.request_id, body.form_token, body.intent)
+        if s is not None
+        else expired_reply()
     )
     return _out(service, s, visitor, reply)
 
@@ -95,8 +99,15 @@ async def session_status(body: Ask, request: Request):
     service = _service(request)
     channel = body.channel if config.DEMO_LEADS else "widget"
     s = service.resolve(body.session_id, channel)
-    reply = Reply("session", "") if s is not None else expired_reply()
-    return _out(service, s, _visitor(request), reply)
+    if s is None:
+        return _out(service, None, _visitor(request), expired_reply())
+    # A discarded transport retry may still be running on the server.
+    async with service._operation(s):
+        reply = expired_reply() if s.expired else Reply("session", "")
+        result = _out(service, s, _visitor(request), reply)
+        if not s.expired and s.lead is not None and s.form_reply is not None:
+            result["form_reply"] = s.form_reply.as_dict()
+        return result
 
 
 @app.post("/api/upload")

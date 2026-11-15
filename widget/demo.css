@@ -26,6 +26,7 @@ h1 { font: 400 clamp(22px, 3vw, 38px)/1.13 Georgia, serif; margin: 8px 0 10px; m
 #consultant { min-width: 0; min-height: 0; }
 button:focus-visible, a:focus-visible { outline: 2px solid #8d421f; outline-offset: 3px; }
 body.telegram { --consultant-accent: #236b91; background: #f0f5f8; }
+.context-actions button:disabled { opacity: .55; cursor: default; }
 .telegram .brand { font: 600 20px var(--consultant-font); letter-spacing: 0; }
 .telegram .demo-header { border-color: #cddde6; }
 .telegram .brand-sub { display: none; }

@@ -65,6 +65,10 @@ QUOTA_SALT = os.getenv("QUOTA_SALT", "change-me")
 UPLOAD_MAX_BYTES = _int("UPLOAD_MAX_BYTES", 300_000)
 UPLOAD_MAX_PAGES = _int("UPLOAD_MAX_PAGES", 20)
 UPLOAD_MAX_CHARS = _int("UPLOAD_MAX_CHARS", 30_000)
+PDF_TIMEOUT = _float("PDF_TIMEOUT", 5)
+PDF_MEMORY_MB = _int("PDF_MEMORY_MB", 96)
+PDF_CONCURRENCY = _int("PDF_CONCURRENCY", 1)
+PDF_QUEUE_MAX = _int("PDF_QUEUE_MAX", 2)
 SESSION_TTL = _int("SESSION_TTL", 3600)
 
 # Telegram: the consultant bot and the chat where leads go.

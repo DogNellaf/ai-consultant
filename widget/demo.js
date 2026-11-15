@@ -16,6 +16,11 @@
   widget.dataset.title = telegram ? "Колосок · бот" : "Консультант «Колоска»";
   widget.dataset.channel = telegram ? "telegram" : "widget";
   document.body.append(widget);
+  window.addEventListener("ai-consultant:state", function (event) {
+    document.querySelectorAll("[data-question]").forEach(function (button) {
+      button.disabled = event.detail.blocked;
+    });
+  });
   document.querySelectorAll("[data-question]").forEach(function (button) {
     button.addEventListener("click", function () {
       if (window.AiConsultant) window.AiConsultant.ask(button.dataset.question);

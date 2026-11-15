@@ -3,6 +3,14 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-11-15
+
+### Fixed
+
+- Extract PDFs in disposable processes with time/CPU/memory limits and a bounded queue, keeping other sessions responsive and preserving the previous file on failure.
+- Disable page question buttons during the lead form; mark page questions explicitly so the server cannot interpret them as contact details or enquiry confirmation.
+- Require retry or explicit dismissal of an unacknowledged request before changing documents. Dismissal refreshes the current form prompt and token without replaying the question.
+
 ## [0.5.2] - 2026-11-15
 
 ### Fixed
