@@ -143,8 +143,6 @@ class Consultant:
             if reply.kind == "lead_done":
                 s.completed_lead_text, s.completed_lead = text, reply
             return reply
-        elif s.completed_lead is not None and text == s.completed_lead_text:
-            return s.completed_lead
         elif wants_manager(text):
             s.completed_lead_text, s.completed_lead = "", None
             return self._lead_start(s, text)

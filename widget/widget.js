@@ -252,8 +252,10 @@
         });
         b.append(t);
       }
-      chips.textContent = "";
-      (r.buttons || []).forEach(function (label) {
+      // A transport error has no server buttons; retain the active form's actions.
+      var keepFormButtons = r.kind === "error" && engine && engine.inForm() && !(r.buttons || []).length;
+      if (!keepFormButtons) chips.textContent = "";
+      (keepFormButtons ? [] : (r.buttons || [])).forEach(function (label) {
         var shortLabels = { "Сколько стоит доставка?": "Доставка", "За сколько дней заказать торт?": "Заказ торта", "Есть что-нибудь без глютена?": "Без глютена", "Позвать менеджера": "Менеджер" };
         var c = el("button", "aic-chip", shortLabels[label] || label);
         c.type = "button";

@@ -3,6 +3,13 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] - 2026-11-16
+
+### Fixed
+
+- Treat a new question matching the last submitted enquiry as a question; deduplicate identified confirmation retries by operation instead of text, retaining compatibility for legacy clients without operation metadata.
+- Preserve active form actions on document upload, rejected replacement, deletion and widget transport errors.
+
 ## [0.5.3] - 2026-11-15
 
 ### Fixed

@@ -175,6 +175,17 @@ class Service:
                 return s.form_reply or Reply("error", "Этот шаг анкеты уже завершён. Отправьте новое сообщение.")
             if intent == "question" and s.lead is not None:
                 return s.form_reply or Reply("lead", "Сначала завершите или отмените заявку.", buttons=["Отмена"])
+            # Legacy clients have no operation identity. Keep their confirmation retry,
+            # but modern clients and explicit questions must be distinguished by operation.
+            if (
+                request_id is None
+                and form_token is None
+                and intent == "message"
+                and s.lead is None
+                and s.completed_lead is not None
+                and text == s.completed_lead_text
+            ):
+                return s.completed_lead
             form_action = bool(text) and (s.lead is not None or wants_manager(text))
             recorded = False
 
@@ -201,8 +212,6 @@ class Service:
         text = (text or "").strip()[:1000]
         if not text:
             return self.consultant.greeting()
-        if s.lead is None and s.completed_lead is not None and text == s.completed_lead_text:
-            return s.completed_lead
         # the lead form, and the request that starts it, stay open after the limit: the limit
         # message itself offers the manager
         question = s.lead is None and not wants_manager(text)
@@ -247,12 +256,19 @@ class Service:
 
     # uploads -----------------------------------------------------------------------------------
 
+    @staticmethod
+    def _file_reply(s: Session, reply: Reply) -> Reply:
+        # File operations do not advance the form or replace its current actions.
+        if s.lead is not None and s.form_reply is not None:
+            reply.buttons = list(s.form_reply.buttons)
+        return reply
+
     async def upload(self, s: Session, filename: str, data: bytes) -> Reply:
         async with self._operation(s):
             if s.expired:
                 return expired_reply()
             reply = await self._upload(s, filename, data)
-            return expired_reply() if s.expired else reply
+            return expired_reply() if s.expired else self._file_reply(s, reply)
 
     async def _upload(self, s: Session, filename: str, data: bytes) -> Reply:
         try:
@@ -298,4 +314,4 @@ class Service:
             if s.upload:
                 self.consultant.searcher.drop(f"upload:{s.id}")
                 s.upload = ""
-            return Reply("upload", "Файл убран, ищу только по базе компании.")
+            return self._file_reply(s, Reply("upload", "Файл убран, ищу только по базе компании."))
